@@ -17,6 +17,7 @@ on:
           - oneplus_13
           - oneplus_13T
           - oneplus_pad_2_pro
+          - Build All Kernels
       count:
         description: '最多清理的运行次数'
         required: false
