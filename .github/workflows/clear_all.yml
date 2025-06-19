@@ -1,14 +1,24 @@
-name: 一键清理所有工作流记录
+name: 清理工作流运行记录
 
 on:
   workflow_dispatch:
     inputs:
       repo:
-        description: '目标仓库(格式:用户名/仓库名)'
+        description: '清理的仓库(格式:用户名/仓库名)'
         required: true
-        default: ${{ github.repository }}
+        default: 'showdo/build_oneplus_sm8750'
+      workflow_name:
+        type: choice
+        description: '清理的工作流名称'
+        required: true
+        default: 'oneplus_ace5_pro'
+        options:
+          - oneplus_ace5_pro
+          - oneplus_13
+          - oneplus_13t
+          - oneplus_pad_2_pro
       count:
-        description: '每个工作流最多清理的运行次数'
+        description: '最多清理的运行次数'
         required: false
         default: '20'
       delete_failed:
@@ -31,147 +41,102 @@ on:
         required: false
         type: boolean
         default: false
-      exclude_workflows:
-        description: '排除的工作流名称(逗号分隔)'
-        required: false
-        default: '一键清理所有工作流记录'
 
 permissions:
   actions: write
 
 jobs:
-  cleanup_all:
+  cleanup:
     runs-on: ubuntu-latest
-    env:
-      CURRENT_REPO: ${{ github.repository }}
-      CURRENT_WORKFLOW_ID: ${{ github.workflow_id }}
-      CURRENT_RUN_ID: ${{ github.run_id }}
 
     steps:
-      - name: 安装必要工具
+      - name: 安装 GitHub CLI 和 jq
         run: |
           sudo apt-get update
           sudo apt-get install -y gh jq
 
-      - name: 认证GitHub CLI
+      - name: 认证 GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-      - name: 获取所有工作流列表
-        id: get_workflows
+      - name: 清理指定工作流及本工作流运行记录
         env:
-          REPO: ${{ inputs.repo || env.CURRENT_REPO }}
-          EXCLUDE: ${{ inputs.exclude_workflows }}
-        run: |
-          # 仓库访问检测
-          if ! gh api "repos/$REPO" &>/dev/null; then
-            echo "::warning::无权限访问 $REPO，自动切换到当前仓库"
-            REPO="$CURRENT_REPO"
-          fi
-
-          # 获取所有工作流并过滤排除项
-          WORKFLOWS_JSON=$(gh api "repos/$REPO/actions/workflows" | jq -c '.workflows[]')
-          IFS=',' read -ra EXCLUDED <<< "$EXCLUDE"
-          
-          FILTERED_WORKFLOWS="[]"
-          while read -r workflow; do
-            name=$(echo "$workflow" | jq -r '.name')
-            skip=false
-            for excluded in "${EXCLUDED[@]}"; do
-              if [[ "$name" == "$excluded" ]]; then
-                skip=true
-                break
-              fi
-            done
-            if ! $skip; then
-              FILTERED_WORKFLOWS=$(jq -n --argjson arr "$FILTERED_WORKFLOWS" --argjson obj "$workflow" '$arr + [$obj]')
-            fi
-          done <<< "$WORKFLOWS_JSON"
-
-          echo "找到 $(echo "$FILTERED_WORKFLOWS" | jq 'length') 个工作流需要处理"
-          echo "workflows=$FILTERED_WORKFLOWS" >> $GITHUB_OUTPUT
-
-      - name: 批量清理工作流记录
-        env:
-          REPO: ${{ inputs.repo || env.CURRENT_REPO }}
+          REPO: ${{ inputs.repo }}
           COUNT: ${{ inputs.count }}
           DELETE_FAILED: ${{ inputs.delete_failed }}
           DELETE_SUCCESS: ${{ inputs.delete_success }}
           DELETE_CANCELLED: ${{ inputs.delete_cancelled }}
           REVERSE_ORDER: ${{ inputs.reverse_order }}
+          WORKFLOW_NAME: ${{ inputs.workflow_name }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
         run: |
-          set -euo pipefail
+          set -e
 
-          echo "${{ steps.get_workflows.outputs.workflows }}" | jq -c '.[]' | while read -r workflow; do
-            WORKFLOW_ID=$(echo "$workflow" | jq -r '.id')
-            WORKFLOW_NAME=$(echo "$workflow" | jq -r '.name')
-            echo "::group::正在处理工作流: $WORKFLOW_NAME"
+          echo "查找工作流 \"$WORKFLOW_NAME\" 的 ID..."
+          WORKFLOW_ID=$(gh api repos/$REPO/actions/workflows | jq -r ".workflows[] | select(.name == \"$WORKFLOW_NAME\") | .id")
+          if [ -z "$WORKFLOW_ID" ]; then
+            echo "未找到工作流 \"$WORKFLOW_NAME\"，退出。"
+            exit 1
+          fi
 
-            # 获取运行记录
-            PER_PAGE=100
-            PAGE=1
-            MATCHED_RUNS="[]"
-            while true; do
-              RESP=$(gh api "repos/$REPO/actions/workflows/$WORKFLOW_ID/runs?per_page=$PER_PAGE&page=$PAGE")
-              RUNS=$(echo "$RESP" | jq '.workflow_runs')
-              COUNT_THIS_PAGE=$(echo "$RUNS" | jq 'length')
+          echo "开始分页获取所有运行记录..."
+          PER_PAGE=100
+          PAGE=1
+          MATCHED_RUNS="[]"
+          while true; do
+            RESP=$(gh api "repos/$REPO/actions/workflows/$WORKFLOW_ID/runs?per_page=$PER_PAGE&page=$PAGE")
+            RUNS=$(echo "$RESP" | jq '.workflow_runs')
+            COUNT_THIS_PAGE=$(echo "$RUNS" | jq 'length')
 
-              if [ "$COUNT_THIS_PAGE" -eq 0 ]; then
-                break
-              fi
-
-              MATCHED_RUNS=$(jq -s 'add' <(echo "$MATCHED_RUNS") <(echo "$RUNS"))
-              PAGE=$((PAGE + 1))
-            done
-
-            # 排序处理
-            if [[ "$REVERSE_ORDER" == "true" ]]; then
-              SORTED_RUNS=$(echo "$MATCHED_RUNS" | jq 'sort_by(.run_started_at)')
-            else
-              SORTED_RUNS=$(echo "$MATCHED_RUNS" | jq 'sort_by(.run_started_at) | reverse')
+            if [ "$COUNT_THIS_PAGE" -eq 0 ]; then
+              break
             fi
 
-            # 限制处理数量
-            TO_DELETE_RUNS=$(echo "$SORTED_RUNS" | jq ".[0:${COUNT}]")
-            TO_DELETE_COUNT=$(echo "$TO_DELETE_RUNS" | jq 'length')
-            echo "准备处理前 $TO_DELETE_COUNT 条记录"
-
-            # 删除记录
-            DELETED=0
-            echo "$TO_DELETE_RUNS" | jq -c '.[]' | while read -r run; do
-              ID=$(echo "$run" | jq -r '.id')
-              STATUS=$(echo "$run" | jq -r '.conclusion')
-              STATE=$(echo "$run" | jq -r '.status')
-
-              if [[ "$STATE" == "in_progress" || "$STATE" == "queued" ]]; then
-                echo "跳过运行 ID: $ID（状态为 $STATE）"
-                continue
-              fi
-
-              if [[ "$STATUS" == "failure" && "$DELETE_FAILED" != "true" ]]; then continue; fi
-              if [[ "$STATUS" == "success" && "$DELETE_SUCCESS" != "true" ]]; then continue; fi
-              if [[ "$STATUS" == "cancelled" && "$DELETE_CANCELLED" != "true" ]]; then continue; fi
-
-              echo "正在删除运行记录 ID: $ID (状态: ${STATUS:-unknown})"
-              if gh api -X DELETE "repos/$REPO/actions/runs/$ID" --silent; then
-                DELETED=$((DELETED + 1))
-              else
-                echo "::warning::删除失败: ID=$ID"
-              fi
-            done
-
-            echo "::notice::工作流 [$WORKFLOW_NAME] 已清理 $DELETED 条记录"
-            echo "::endgroup::"
+            MATCHED_RUNS=$(jq -s 'add' <(echo "$MATCHED_RUNS") <(echo "$RUNS"))
+            PAGE=$((PAGE + 1))
           done
 
-      - name: 清理本工作流历史
-        if: ${{ !contains(inputs.exclude_workflows, github.workflow) }}
-        run: |
-          echo "正在清理本工作流历史记录..."
-          gh api "repos/${{ env.CURRENT_REPO }}/actions/workflows/${{ env.CURRENT_WORKFLOW_ID }}/runs?per_page=50" \
-            | jq -c '.workflow_runs[] | select(.id != env.CURRENT_RUN_ID)' \
-            | while read -r run; do
-                ID=$(echo "$run" | jq -r '.id')
-                echo "删除历史记录 ID: $ID"
-                gh api -X DELETE "repos/${{ env.CURRENT_REPO }}/actions/runs/$ID" --silent || \
-                  echo "::warning::删除失败: ID=$ID"
-              done
+          echo "共获取到 $(echo "$MATCHED_RUNS" | jq 'length') 条运行记录。"
+
+          # 排序顺序：旧到新 or 新到旧
+          if [[ "$REVERSE_ORDER" == "true" ]]; then
+            SORTED_RUNS=$(echo "$MATCHED_RUNS" | jq 'sort_by(.run_started_at)')
+          else
+            SORTED_RUNS=$(echo "$MATCHED_RUNS" | jq 'sort_by(.run_started_at) | reverse')
+          fi
+
+          # 仅保留前 N 条
+          TO_DELETE_RUNS=$(echo "$SORTED_RUNS" | jq ".[0:${COUNT}]")
+
+          echo "$TO_DELETE_RUNS" | jq -c '.[]' | while read run; do
+            ID=$(echo "$run" | jq -r '.id')
+            STATUS=$(echo "$run" | jq -r '.conclusion')
+            STATE=$(echo "$run" | jq -r '.status')
+
+            if [[ "$STATE" == "in_progress" || "$STATE" == "queued" ]]; then
+              echo "跳过运行 ID: $ID（状态为 $STATE）"
+              continue
+            fi
+
+            if [[ "$STATUS" == "failure" && "$DELETE_FAILED" != "true" ]]; then continue; fi
+            if [[ "$STATUS" == "success" && "$DELETE_SUCCESS" != "true" ]]; then continue; fi
+            if [[ "$STATUS" == "cancelled" && "$DELETE_CANCELLED" != "true" ]]; then continue; fi
+
+            echo "删除运行记录 ID: $ID (状态: $STATUS)"
+            gh api -X DELETE "repos/$REPO/actions/runs/$ID" || echo "删除失败"
+          done
+
+          echo "清理本工作流运行记录..."
+          SELF_WORKFLOW_ID=$(gh api repos/$REPO/actions/workflows | jq -r '.workflows[] | select(.name == "清理工作流运行记录") | .id')
+          if [ -n "$SELF_WORKFLOW_ID" ]; then
+            SELF_RUNS=$(gh api "repos/$REPO/actions/workflows/$SELF_WORKFLOW_ID/runs?per_page=50" | jq -c '.workflow_runs[]')
+
+            echo "$SELF_RUNS" | while read run; do
+              ID=$(echo "$run" | jq -r '.id')
+              if [[ "$ID" == "$CURRENT_RUN_ID" ]]; then
+                echo "跳过当前运行 ID: $ID"
+                continue
+              fi
+              echo "删除本工作流运行记录 ID: $ID"
+              gh api -X DELETE "repos/$REPO/actions/runs/$ID" || echo "删除失败"
+            done
+          fi
