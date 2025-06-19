@@ -15,7 +15,7 @@ on:
         options:
           - oneplus_ace5_pro
           - oneplus_13
-          - oneplus_13t
+          - oneplus_13T
           - oneplus_pad_2_pro
       count:
         description: '最多清理的运行次数'
