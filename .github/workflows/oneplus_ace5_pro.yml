@@ -16,10 +16,9 @@ on:
        default: true
        type: boolean
       LZ4_ENABLE:
-       description: "是否启用lz4+zstd优化"
+       description: "是否启用lz4kd"
        required: false
        default: true
-       type: boolean
        type: boolean
       enable_feature_z:
        description: "是否添加风驰驱动"
@@ -125,7 +124,6 @@ jobs:
             cp ../kernel_patches/lz4armv8.S ./common/lib
             cp ../kernel_patches/002-zstd.patch ./common/
            fi
- 
            # Apply patches
            cd ./common
 
@@ -222,7 +220,6 @@ jobs:
          git add -A
          git commit -m "Add HMBird GKI patch" || true
 
- 
       - name: Add SUSFS Configuration Settings
         run: |
           cd kernel_workspace/kernel_platform
@@ -248,6 +245,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
+
           # Add BBR
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -342,5 +340,5 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-         name: AnyKernel3_${{ env.KSUVER }}_oneplus_ace5_pro_SuKiSu
+         name: AnyKernel3_${{ env.KSUVER }}_oneplus_ace5_pro_SuKiSu_${{ inputs.parent_run_id }}
          path: ./AnyKernel3/*
