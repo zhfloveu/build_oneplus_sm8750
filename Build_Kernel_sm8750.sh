@@ -67,7 +67,7 @@ read -p "输入内核构建日期更改(回车默认为原厂) : " input_time
 read -p "是否启用kpm?(回车默认开启) [y/N]: " kpm
 [[ "$kpm" =~ [yY] ]] && ENABLE_KPM=true
 
-read -p "是否启用lz4kd?(回车默认开启) [y/N]: " lz4
+read -p "是否启用lz4+zstd?(回车默认开启) [y/N]: " lz4
 [[ "$lz4" =~ [yY] ]] && ENABLE_LZ4KD=true
 
 # 环境变量 - 按机型区分ccache目录
@@ -177,6 +177,7 @@ sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile || er
 info "设置susfs..."
 cd "$KERNEL_WORKSPACE" || error "返回工作目录失败"
 git clone -q https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android15-6.6 || info "susfs4ksu已存在或克隆失败"
+git clone https://github.com/Xiaomichael/kernel_patches.git
 git clone -q https://github.com/SukiSU-Ultra/SukiSU_patch.git || info "SukiSU_patch已存在或克隆失败"
 
 cd kernel_platform || error "进入kernel_platform失败"
@@ -184,11 +185,11 @@ cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
 cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
 cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-# 复制lz4k文件
-cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
-cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./common/lib
-cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto
-cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
+if [ "${{ github.event.inputs.enable_feature_y }}" = "true"]; then
+  cp ../kernel_patches/001-lz4.patch ./common/
+  cp ../kernel_patches/lz4armv8.S ./common/lib
+  cp ../kernel_patches/002-zstd.patch ./common/
+fi
 
 cd $KERNEL_WORKSPACE/kernel_platform/common || { echo "进入common目录失败"; exit 1; }
 
@@ -208,6 +209,10 @@ fi
 patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || info "SUSFS补丁应用可能有警告"
 cp "$KERNEL_WORKSPACE/SukiSU_patch/hooks/syscall_hooks.patch" ./ || error "复制syscall_hooks.patch失败"
 patch -p1 -F 3 < syscall_hooks.patch || info "syscall_hooks补丁应用可能有警告"
+if [ "${{ github.event.inputs.enable_feature_y }}" = "true" ]; then
+  git apply -p1 < 001-lz4.patch || true
+  patch -p1 < 002-zstd.patch || true
+fi
 
 # 应用HMBird GKI补丁
 apply_hmbird_patch() {
@@ -244,14 +249,6 @@ apply_hmbird_patch
 # 返回common目录
 cd .. || error "返回common目录失败"
 
-# 应用lz4kd补丁
-if [ "$ENABLE_LZ4KD" = true ]; then
-    info "应用lz4kd补丁..."
-    # 使用绝对路径确保正确找到补丁文件
-    cp "$KERNEL_WORKSPACE/SukiSU_patch/other/zram/zram_patch/6.6/lz4kd.patch" ./ || error "复制lz4kd补丁失败"
-    patch -p1 -F 3 < lz4kd.patch || info "lz4kd补丁应用可能有警告"
-fi
-
 # 添加SUSFS配置
 info "添加SUSFS配置..."
 cd arch/arm64/configs || error "进入configs目录失败"
@@ -274,8 +271,8 @@ CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
 CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
 CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
 CONFIG_CRYPTO_LZ4HC=y
+CONFIG_CRYPTO_LZ4=y
 CONFIG_CRYPTO_LZ4K=y
-CONFIG_CRYPTO_LZ4KD=y
 CONFIG_CRYPTO_842=y
 # BBR
 CONFIG_TCP_CONG_ADVANCED=y
@@ -339,7 +336,7 @@ make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clan
 # 应用Linux补丁
 info "应用Linux补丁..."
 cd out/arch/arm64/boot || error "进入boot目录失败"
-curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.11-beta/patch_linux || error "下载patch_linux失败"
+curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux || error "下载patch_linux失败"
 chmod +x patch_linux
 ./patch_linux || error "应用patch_linux失败"
 rm -f Image
