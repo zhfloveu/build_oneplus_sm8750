@@ -16,7 +16,7 @@ on:
        default: true
        type: boolean
       enable_feature_y:
-       description: "启用lz4kd"
+       description: "启用lz4+zstd"
        required: false
        default: true
        type: boolean
