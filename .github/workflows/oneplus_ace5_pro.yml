@@ -16,7 +16,7 @@ on:
        default: true
        type: boolean
       LZ4_ENABLE:
-       description: "启用lz4+zstd"
+       description: "启用lz4kd"
        required: false
        default: true
        type: boolean
@@ -113,6 +113,7 @@ jobs:
         run: |
            cd kernel_workspace
            git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android15-6.6
+           git clone https://github.com/Xiaomichael/kernel_patches.git
            git clone https://github.com/SukiSU-Ultra/SukiSU_patch.git
 
            cd kernel_platform        
