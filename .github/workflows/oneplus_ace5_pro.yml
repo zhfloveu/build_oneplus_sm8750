@@ -11,17 +11,17 @@ on:
        required: true
        default: 'Wed Dec 4 02:11:46 UTC 2024'
       enable_feature_x:
-       description: "是否启用kpm"
+       description: "启用kpm"
        required: false
        default: true
        type: boolean
       LZ4_ENABLE:
-       description: "是否启用lz4kd"
+       description: "启用lz4+zstd"
        required: false
        default: true
        type: boolean
       enable_feature_z:
-       description: "是否添加风驰驱动"
+       description: "添加风驰驱动"
        required: false
        default: true
        type: boolean
