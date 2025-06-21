@@ -2,14 +2,6 @@ name: oneplus_ace5_pro
 on:
   workflow_dispatch:
     inputs:
-      KERNEL_SUFFIX:
-        description: '内核名称修改(可改中文和emoji)'
-        required: true
-        default: '-android15-8-g013ec21bba94-abogki383916444-4k'
-      KERNEL_TIME:
-       description: "内核构建日期更改(默认为原厂)"
-       required: true
-       default: 'Wed Dec 4 02:11:46 UTC 2024'
       enable_feature_x:
        description: "启用kpm"
        required: false
@@ -33,13 +25,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      CCACHE_COMPILERCHECK: "content"
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
       CCACHE_HARDLINK: "true"
-      CCACHE_DIR: /home/runner/.ccache
+      CCACHE_DIR: /home/runner/.ccache  
       CCACHE_MAXSIZE: 8G
-      CCACHE_COMPRESS: "true"
-      CCACHE_COMPRESSLEVEL: "6"
     steps:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
@@ -55,35 +45,32 @@ jobs:
         run: |
          git config --global user.name "Q1udaoyu"
          git config --global user.email "sucisama2888@gmail.com"
+
       - name: Install dependencies
         run: |
           sudo apt update
-          # 检查并安装必要组件
           for pkg in python3 git curl ccache; do
-            if ! command -v $pkg &> /dev/null; then
-              sudo apt install -y $pkg
+            if ! command -v "$pkg" &> /dev/null; then
+              sudo apt install -y "$pkg"
+            else
+              upgradable=$(apt list --upgradable 2>/dev/null | grep -w "^$pkg/")
+              if [ -n "$upgradable" ]; then
+                sudo apt install -y "$pkg"
+              else
+                echo "$pkg 已是最新版"
+              fi
             fi
           done
-          sudo ln -s /usr/bin/ccache /usr/local/bin/ccache-clang
-          sudo ln -s /usr/bin/ccache /usr/local/bin/ccache-clang++
 
-      - name: Configure ccache
-        run: |
-          ccache --clear
-          ccache --set-config=max_size=8G
-          ccache --set-config=compression=true
-          ccache --set-config=compression_level=6
-          ccache -s
 
       - name: Restore ccache
         uses: actions/cache@v3
-        id: restore-ccache
         with:
           path: /home/runner/.ccache
-          key: ccache-${{ runner.os }}-${{ hashFiles('kernel_workspace/kernel_platform/common/build.config.gki', 'kernel_workspace/kernel_platform/common/Makefile') }}
+          key: ccache-${{ runner.os }}-${{ github.ref }}
           restore-keys: |
             ccache-${{ runner.os }}-
-
+            
       - name: Install repo tool
         run: |
          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
@@ -103,117 +90,43 @@ jobs:
          cd kernel_workspace/kernel_platform
          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/susfs-1.5.8/kernel/setup.sh" | bash -s susfs-1.5.8
          cd ./KernelSU
-         KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10606)
+         KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10700)
          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
          export KSU_VERSION=$KSU_VERSION
          sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
       
         
       - name: Set up susfs
+        env:
+          ENABLE_FEATURE_Y: ${{ github.event.inputs.enable_feature_y }}
         run: |
-           cd kernel_workspace
-           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android15-6.6
-           git clone https://github.com/Xiaomichael/kernel_patches.git
-           git clone https://github.com/SukiSU-Ultra/SukiSU_patch.git
-
-           cd kernel_platform        
-           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
-           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-           if [ "${{ github.event.inputs.enable_feature_y }}" = "true"]; then
+          cd kernel_workspace
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android15-6.6
+          git clone https://github.com/Xiaomichael/kernel_patches.git
+          git clone https://github.com/SukiSU-Ultra/SukiSU_patch.git
+          cd kernel_platform        
+          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
+          cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
+          cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+          if [ "$ENABLE_FEATURE_Y" = "true" ]; then
             cp ../kernel_patches/001-lz4.patch ./common/
             cp ../kernel_patches/lz4armv8.S ./common/lib
             cp ../kernel_patches/002-zstd.patch ./common/
-           fi
-           # Apply patches
-           cd ./common
-
-           sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-android15-6.6.patch
-           sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-android15-6.6.patch
-
-           patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
-           cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
-           patch -p1 -F 3 < syscall_hooks.patch
-           if [ "${{ github.event.inputs.enable_feature_y }}" = "true" ]; then
+          fi
+          cd ./common
+          patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
+          cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
+          patch -p1 -F 3 < syscall_hooks.patch
+          if [ "$ENABLE_FEATURE_Y" = "true" ]; then
             git apply -p1 < 001-lz4.patch || true
             patch -p1 < 002-zstd.patch || true
-           fi
-           echo "完成"
+          fi
       
       - name: Apply HMBird GKI patch
         run: |
          cd kernel_workspace/kernel_platform/common/drivers
-         cat << 'EOF' > hmbird_patch.c
-         #include <linux/init.h>
-         #include <linux/module.h>
-         #include <linux/of.h>
-         #include <linux/slab.h>
-         #include <linux/string.h>
-
-         static int __init hmbird_patch_init(void)
-         {
-             struct device_node *ver_np;
-             const char *type;
-             int ret;
-
-             ver_np = of_find_node_by_path("/soc/oplus,hmbird/version_type");
-             if (!ver_np) {
-                  pr_info("hmbird_patch: version_type node not found\n");
-                  return 0;
-             }
-
-             ret = of_property_read_string(ver_np, "type", &type);
-             if (ret) {
-                  pr_info("hmbird_patch: type property not found\n");
-                  of_node_put(ver_np);
-                  return 0;
-             }
-
-             if (strcmp(type, "HMBIRD_OGKI")) {
-                  of_node_put(ver_np);
-                  return 0;
-             }
-
-             struct property *prop = of_find_property(ver_np, "type", NULL);
-             if (prop) {
-                  struct property *new_prop = kmalloc(sizeof(*prop), GFP_KERNEL);
-                  if (!new_prop) {
-                       pr_info("hmbird_patch: kmalloc for new_prop failed\n");
-                       of_node_put(ver_np);
-                       return 0;
-             }
-             memcpy(new_prop, prop, sizeof(*prop));
-             new_prop->value = kmalloc(strlen("HMBIRD_GKI") + 1, GFP_KERNEL);
-             if (!new_prop->value) {
-                  pr_info("hmbird_patch: kmalloc for new_prop->value failed\n");
-                  kfree(new_prop);
-                  of_node_put(ver_np);
-                  return 0;
-            }
-            strcpy(new_prop->value, "HMBIRD_GKI");
-            new_prop->length = strlen("HMBIRD_GKI") + 1;
-
-            if (of_remove_property(ver_np, prop) != 0) {
-                 pr_info("hmbird_patch: of_remove_property failed\n");
-                 return 0;
-            }
-            if (of_add_property(ver_np, new_prop) !=0) {
-                 pr_info("hmbird_patch: of_add_property failed\n");
-                 return 0;
-            }
-            pr_info("hmbird_patch: success from HMBIRD_OGKI to HMBIRD_GKI\n");
-         }
-         else {
-             pr_info("hmbird_patch: type property structure not found\n");
-         }
-         of_node_put(ver_np);
-         return 0;
-         }
-         early_initcall(hmbird_patch_init);
-         MODULE_LICENSE("GPL");
-         MODULE_AUTHOR("reigadegr");
-         MODULE_DESCRIPTION("Forcefully convert HMBIRD_OGKI to HMBIRD_GKI.");
-         EOF
+         curl -sSLo hmbird_patch.c https://raw.githubusercontent.com/showdo/build_oneplus_sm8750/main/hmbird_patch.c
+         grep -q "MODULE_DESCRIPTION" hmbird_patch.c
          if ! grep -q "hmbird_patch.o" Makefile; then
          echo "obj-y += hmbird_patch.o" >> Makefile
          fi
@@ -223,6 +136,8 @@ jobs:
 
 
       - name: Add SUSFS Configuration Settings
+        env:
+          ENABLE_FEATURE_X: ${{ github.event.inputs.enable_feature_X }}
         run: |
           cd kernel_workspace/kernel_platform
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -230,7 +145,9 @@ jobs:
           # Add VFS configuration settings
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
-          
+          if [ "$ENABLE_FEATURE_X" = "true" ]; then
+            echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+          fi
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -267,23 +184,12 @@ jobs:
           sudo sed -i 's/check_defconfig//' ./common/build.config.gki
           cd common
           git add -A && git commit -a -m "BUILD Kernel"
-      
-      - name: Add KPM Configuration Settings
-        if: ${{inputs.enable_feature_x }}
-        run: |
-          cd kernel_workspace/kernel_platform
-          echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
-         
-          #Remove check_defconfig
-          sudo sed -i 's/check_defconfig//' ./common/build.config.gki
-          cd common
-          git add -A && git commit -a -m "BUILD Kernel"
           
       - name: Add make name
         run: |
          cd kernel_workspace/kernel_platform
          sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
-         sudo sed -i 's/-4k/${{ github.event.inputs.KERNEL_SUFFIX }}/g' ./common/arch/arm64/configs/gki_defconfig
+         sudo sed -i 's/-4k/-android15-TG@qdykernel/g' ./common/arch/arm64/configs/gki_defconfig
         
       - name: Add sched_ext
         if: ${{inputs.enable_feature_z }}
@@ -296,37 +202,23 @@ jobs:
 
       - name: Build Kernel
         run: |
-          export PATH="/usr/lib/ccache:$PATH"
-          echo "=== CCACHE BEFORE BUILD ==="
-          ccache -s
-          
-          export KBUILD_BUILD_TIMESTAMP="${{ github.event.inputs.KERNEL_TIME }}"
+          export KBUILD_BUILD_TIMESTAMP="Tue Dec 17 23:36:49 UTC 2024"
           export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/clang-r510928/bin:$PATH"
+          export PATH="/usr/lib/ccache:$PATH"
           sudo apt install libelf-dev
           cd kernel_workspace/kernel_platform/common
           
+          # Step 1: 生成配置
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-            CC="ccache clang" \
-            RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
+            CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
             PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
             LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2 gki_defconfig
-            
+          
+          # Step 2: 编译内核镜像
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-            CC="ccache clang" \
-            RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
+            CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
             PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
             LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2 Image
-          
-          echo "=== CCACHE AFTER BUILD ==="
-          ccache -s
-          echo "Cache hit rate: $(ccache -s | grep 'cache hit rate')"
-
-      - name: Save ccache
-        if: always()
-        uses: actions/cache@v3
-        with:
-          path: /home/runner/.ccache
-          key: ${{ steps.restore-ccache.outputs.cache-primary-key }}
           
       - name: Apply Linux Patch
         run: |
