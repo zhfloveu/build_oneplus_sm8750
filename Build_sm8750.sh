@@ -250,7 +250,6 @@ apply_hmbird_patch
 # 返回common目录
 cd .. || error "返回common目录失败"
 cd arch/arm64/configs || error "进入configs目录失败"
-cp gki_defconfig gki_defconfig.tmpbak || error "配置备份失败"
 # 添加SUSFS配置
 info "添加SUSFS配置..."
 echo -e "CONFIG_KSU=y
@@ -377,8 +376,6 @@ clean_patches() {
         "$KERNEL_WORKSPACE/SukiSU_patch"
         "$KERNEL_WORKSPACE/kernel_platform/sched_ext"
         "$KERNEL_WORKSPACE/kernel_platform/KernelSU"
-        "$KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/"
-        "$KERNEL_WORKSPACE/kernel_platform/KernelSU"
         "$WORKSPACE/AnyKernel3"
     )
     
@@ -391,6 +388,11 @@ clean_patches() {
     done
     rm -rf $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/Image
     rm -rf $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/patch_linux
+    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/fs/sus_su.c
+    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/50_add_susfs_in_gki-android15-6.6.patch
+    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/susfs.c
+
+
     
     # 3. 恢复被修改的源码文件（通过Git）
     info "恢复源码修改..."
@@ -419,7 +421,6 @@ clean_patches() {
     find "$KERNEL_WORKSPACE" -name "*.ko" -delete
     find "$KERNEL_WORKSPACE" -name "*.cmd" -delete
     rm -rf "$KERNEL_WORKSPACE/out" "$KERNEL_WORKSPACE/.tmp_versions"
-    mv "$KERNEL_WORKSPACE/kernel_platform/common/arch/arm64/configs/gki_defconfig.tmpbak" "$KERNEL_WORKSPACE/kernel_platform/common/arch/arm64/configs/gki_defconfig"
 }
 
 # ==================== 在编译完成后调用 ====================
