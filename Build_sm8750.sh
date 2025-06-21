@@ -263,7 +263,6 @@ CONFIG_KSU_SUSFS_SUS_MOUNT=y
 CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
 CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
 CONFIG_KSU_SUSFS_SUS_KSTAT=y
-CONFIG_KSU_SUSFS_SUS_OVERLAYFS=n
 CONFIG_KSU_SUSFS_TRY_UMOUNT=y
 CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
 CONFIG_KSU_SUSFS_SPOOF_UNAME=y
@@ -366,6 +365,54 @@ cp "$WORKSPACE/AnyKernel3/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip" "
 info "内核包路径: C:/Kernel_Build/${DEVICE_NAME}/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip"
 info "Image路径: C:/Kernel_Build/${DEVICE_NAME}/Image"
 info "请在C盘目录中查找内核包和Image文件。"
-info "清理本次构建的所有文件..."
-sudo rm -rf "$WORKSPACE" || error "无法删除工作目录，可能未创建"
-info "清理完成！下次运行脚本将重新拉取源码并构建内核。"
+info "正在重置源码到初始同步状态..."
+cd "$KERNEL_WORKSPACE" || error "进入源码目录失败"
+
+# 重置所有仓库到初始状态
+repo forall -c 'git reset --hard; git clean -fdx' || error "仓库重置失败"
+
+# 删除额外添加的补丁文件
+rm -rf susfs4ksu kernel_patches SukiSU_patch sched_ext || info "补丁目录已清理"
+info "源码已重置到初始同步状态！下次运行脚本将直接开始编译。"
+
+# 询问是否保留构建目录
+info "是否保留构建目录用于增量编译? (推荐保留以加速后续编译)"
+read -p "回车默认保留，请输入：[Y/n]: " keep_build
+keep_build=${keep_build:-Y}  # 默认值为 Y
+
+if [[ "$keep_build" =~ [yY] ]]; then
+    info "保留构建目录，下次可增量编译"
+    info "提示：如需完全清理，可手动删除目录:"
+    info "      $KERNEL_WORKSPACE/kernel_platform/common/out"
+else
+    info "清理构建目录..."
+    rm -rf "$KERNEL_WORKSPACE/kernel_platform/common/out"
+    info "构建目录已清理"
+fi
+
+# ==================== 最终清理阶段 ====================
+info "正在进行最终清理..."
+
+# 1. 保留源码和构建目录（增量编译用）
+info "保留以下目录供增量编译使用："
+info "- 源码目录: $KERNEL_WORKSPACE"
+info "- 构建目录: $KERNEL_WORKSPACE/kernel_platform/common/out"
+
+# 2. 强制删除 AnyKernel3 目录（避免旧刷机包残留）
+if [ -d "$WORKSPACE/AnyKernel3" ]; then
+    info "删除 AnyKernel3 打包目录..."
+    rm -rf "$WORKSPACE/AnyKernel3" || error "删除 AnyKernel3 目录失败"
+else
+    info "未检测到 AnyKernel3 目录，跳过删除"
+fi
+
+# 3. 保留 Windows 输出目录的文件（不删除已生成的刷机包）
+info "以下文件已保留在输出目录："
+info "- 内核镜像: /mnt/c/Kernel_Build/${DEVICE_NAME}/Image"
+info "- 刷机包: /mnt/c/Kernel_Build/${DEVICE_NAME}/AnyKernel3_*.zip"
+
+# 4. 提示下次编译流程
+info "下次编译时将："
+info "✓ 自动复用现有源码"
+info "✓ 增量编译修改部分"
+info "✓ 重新生成干净的 AnyKernel3 包"
