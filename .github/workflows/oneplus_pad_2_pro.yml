@@ -2,21 +2,31 @@ name: oneplus_pad_2_pro
 on:
   workflow_dispatch:
     inputs:
+      KERNEL_SUFFIX:
+        description: '内核名称修改(可改中文和emoji)'
+        required: true
+        default: '-TG@qdykernel'
+      KERNEL_TIME:
+       description: "内核构建日期更改(默认为原厂)"
+       required: true
+       default: 'Wed Dec 4 02:11:46 UTC 2024'
       enable_feature_x:
        description: "启用kpm"
        required: false
        default: true
        type: boolean
       enable_feature_y:
-       description: "启用lz4+zstd"
+       description: "启用lz4kd"
        required: false
        default: true
        type: boolean
       enable_feature_z:
-       description: "添加风驰驱动"
+       description: "是否添加风驰驱动"
        required: false
        default: true
        type: boolean
+      
+       
 
 
 jobs:
@@ -49,7 +59,6 @@ jobs:
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y python3 git curl
           sudo apt install -y python3 git curl ccache
-
 
       - name: Restore ccache
         uses: actions/cache@v3
@@ -88,27 +97,34 @@ jobs:
         env:
           ENABLE_FEATURE_Y: ${{ github.event.inputs.enable_feature_y }}
         run: |
-          cd kernel_workspace
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android15-6.6
-          git clone https://github.com/Xiaomichael/kernel_patches.git
-          git clone https://github.com/SukiSU-Ultra/SukiSU_patch.git
-          cd kernel_platform        
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
-          cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-          if [ "$ENABLE_FEATURE_Y" = "true" ]; then
+           cd kernel_workspace
+           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android15-6.6
+           git clone https://github.com/Xiaomichael/kernel_patches.git
+           git clone https://github.com/SukiSU-Ultra/SukiSU_patch.git
+
+           cd kernel_platform        
+           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
+           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
+           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+           if [ "$ENABLE_FEATURE_Y" = "true" ]; then
             cp ../kernel_patches/001-lz4.patch ./common/
             cp ../kernel_patches/lz4armv8.S ./common/lib
             cp ../kernel_patches/002-zstd.patch ./common/
-          fi
-          cd ./common
-          patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
-          cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
-          patch -p1 -F 3 < syscall_hooks.patch
-          if [ "$ENABLE_FEATURE_Y" = "true" ]; then
+           fi
+           # Apply patches
+           cd ./common
+
+           sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-android15-6.6.patch
+           sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-android15-6.6.patch
+
+           patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || true
+           cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
+           patch -p1 -F 3 < syscall_hooks.patch
+           if [ "$ENABLE_FEATURE_Y" = "true" ]; then
             git apply -p1 < 001-lz4.patch || true
             patch -p1 < 002-zstd.patch || true
-          fi
+           fi
+           echo "完成"
       
       - name: Apply HMBird GKI patch
         run: |
@@ -121,11 +137,8 @@ jobs:
          cd ../../../
          git add -A
          git commit -m "Add HMBird GKI patch" || true
-
-
+           
       - name: Add SUSFS Configuration Settings
-        env:
-          ENABLE_FEATURE_X: ${{ github.event.inputs.enable_feature_X }}
         run: |
           cd kernel_workspace/kernel_platform
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -133,9 +146,7 @@ jobs:
           # Add VFS configuration settings
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
-          if [ "$ENABLE_FEATURE_X" = "true" ]; then
-            echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
-          fi
+          
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -154,10 +165,11 @@ jobs:
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
           
           echo "CONFIG_CRYPTO_LZ4HC=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_CRYPTO_LZ4=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_LZ4K=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_CRYPTO_LZ4=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_842=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_LOCALVERSION_AUTO=n" >> ./common/arch/arm64/configs/gki_defconfig
+
           # Add BBR
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -172,12 +184,23 @@ jobs:
           sudo sed -i 's/check_defconfig//' ./common/build.config.gki
           cd common
           git add -A && git commit -a -m "BUILD Kernel"
+      
+      - name: Add KPM Configuration Settings
+        if: ${{inputs.enable_feature_x }}
+        run: |
+          cd kernel_workspace/kernel_platform
+          echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+         
+          #Remove check_defconfig
+          sudo sed -i 's/check_defconfig//' ./common/build.config.gki
+          cd common
+          git add -A && git commit -a -m "BUILD Kernel"
           
       - name: Add make name
         run: |
          cd kernel_workspace/kernel_platform
          sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
-         sudo sed -i 's/-4k/-android15-TG@qdykernel/g' ./common/arch/arm64/configs/gki_defconfig
+         sudo sed -i 's/-4k/${{ github.event.inputs.KERNEL_SUFFIX }}/g' ./common/arch/arm64/configs/gki_defconfig
         
       - name: Add sched_ext
         if: ${{inputs.enable_feature_z }}
@@ -190,13 +213,12 @@ jobs:
 
       - name: Build Kernel
         run: |
-          export KBUILD_BUILD_TIMESTAMP="Wed Dec 4 02:11:46 UTC 2024"
+          export KBUILD_BUILD_TIMESTAMP="${{ github.event.inputs.KERNEL_TIME }}"
           export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/clang-r510928/bin:$PATH"
           export PATH="/usr/lib/ccache:$PATH"
           sudo apt install libelf-dev
           cd kernel_workspace/kernel_platform/common
-          
-          # Step 1: 生成配置
+           # Step 1: 生成配置
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
             CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
             PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
@@ -207,6 +229,7 @@ jobs:
             CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
             PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
             LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2 Image
+            
       - name: Apply Linux Patch
         run: |
          cd kernel_workspace/kernel_platform/common/out/arch/arm64/boot
