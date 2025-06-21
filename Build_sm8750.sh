@@ -169,7 +169,7 @@ cd kernel_platform || error "进入kernel_platform失败"
 curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/susfs-1.5.8/kernel/setup.sh" | bash -s susfs-1.5.8 || error "SukiSU设置失败"
 
 cd KernelSU || error "进入KernelSU目录失败"
-KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 11259)
+KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10700)
 export KSU_VERSION=$KSU_VERSION
 sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile || error "修改KernelSU版本失败"
 info "$KSU_VERSION"
