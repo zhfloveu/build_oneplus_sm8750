@@ -376,6 +376,10 @@ clean_patches() {
         "$KERNEL_WORKSPACE/kernel_patches"
         "$KERNEL_WORKSPACE/SukiSU_patch"
         "$KERNEL_WORKSPACE/kernel_platform/sched_ext"
+        "$KERNEL_WORKSPACE/kernel_platform/KernelSU"
+        "$KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/"
+        "$KERNEL_WORKSPACE/kernel_platform/KernelSU"
+        "$WORKSPACE/AnyKernel3"
     )
     
     # 2. 删除所有补丁目录
@@ -385,6 +389,8 @@ clean_patches() {
             rm -rf "$dir"
         fi
     done
+    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/Image
+    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/patch_linux
     
     # 3. 恢复被修改的源码文件（通过Git）
     info "恢复源码修改..."
