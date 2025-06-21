@@ -153,7 +153,7 @@ cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
 
 # 初始化源码
 info "初始化repo并同步源码..."
-repo init -u https://github.com/HanKuCha/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
+repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
 repo --trace sync -c -j$(nproc --all) --no-tags || error "repo同步失败"
 
 # ==================== 核心构建步骤 ====================
@@ -173,8 +173,6 @@ KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10700)
 export KSU_VERSION=$KSU_VERSION
 sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile || error "修改KernelSU版本失败"
 info "$KSU_VERSION"
-echo -e "\n按回车键继续..."
-read -r
 
 # 设置susfs
 info "设置susfs..."
@@ -260,7 +258,7 @@ CONFIG_KSU_SUSFS_SUS_SU=n
 CONFIG_KSU_MANUAL_HOOK=y
 CONFIG_KSU_SUSFS=y
 CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_PATH=y
+CONFIG_KSU_SUSFS_SUS_PATH=n
 CONFIG_KSU_SUSFS_SUS_MOUNT=y
 CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
 CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
