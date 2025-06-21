@@ -136,6 +136,8 @@ jobs:
 
            
       - name: Add SUSFS Configuration Settings
+        env:
+          ENABLE_FEATURE_X: ${{ github.event.inputs.enable_feature_X }}
         run: |
           cd kernel_workspace/kernel_platform
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -143,6 +145,9 @@ jobs:
           # Add VFS configuration settings
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
+          if [ "$ENABLE_FEATURE_X" = "true" ]; then
+            echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+          fi
           
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -181,16 +186,6 @@ jobs:
           cd common
           git add -A && git commit -a -m "BUILD Kernel"
       
-      - name: Add KPM Configuration Settings
-        if: ${{inputs.enable_feature_x }}
-        run: |
-          cd kernel_workspace/kernel_platform
-          echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
-         
-          #Remove check_defconfig
-          sudo sed -i 's/check_defconfig//' ./common/build.config.gki
-          cd common
-          git add -A && git commit -a -m "BUILD Kernel"
           
       - name: Add make name
         run: |
