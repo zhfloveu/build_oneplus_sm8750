@@ -48,28 +48,11 @@ jobs:
 
       
       
-      - name: Update and install dependencies
+      - name: Install dependencies
         run: |
-          set +e
-          sudo apt update
-          if [ $? -ne 0 ]; then
-            echo "apt update 返回非 0，可能有可升级包，忽略退出码，继续执行"
-          fi
-          set -e
-      
-          for pkg in python3 git curl ccache; do
-            if ! command -v "$pkg" &> /dev/null; then
-              sudo apt install -y "$pkg"
-            else
-              upgradable=$(apt list --upgradable 2>/dev/null | grep -w "^$pkg/")
-              if [ -n "$upgradable" ]; then
-                sudo apt install -y "$pkg"
-              else
-                echo "$pkg 已是最新版"
-              fi
-            fi
-          done
-        shell: bash
+          sudo apt update && sudo apt upgrade -y
+          sudo apt install -y python3 git curl
+          sudo apt install -y python3 git curl ccache
 
 
       - name: Restore ccache
