@@ -172,6 +172,9 @@ cd KernelSU || error "进入KernelSU目录失败"
 KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 11259)
 export KSU_VERSION=$KSU_VERSION
 sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile || error "修改KernelSU版本失败"
+info "$KSU_VERSION"
+echo -e "\n按回车键继续..."
+read -r
 
 # 设置susfs
 info "设置susfs..."
@@ -185,7 +188,7 @@ cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
 cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
 cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-if [ "${{ github.event.inputs.enable_feature_y }}" = "true"]; then
+if [ "$ENABLE_LZ4KD" = "true"]; then
   cp ../kernel_patches/001-lz4.patch ./common/
   cp ../kernel_patches/lz4armv8.S ./common/lib
   cp ../kernel_patches/002-zstd.patch ./common/
@@ -209,7 +212,7 @@ fi
 patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch || info "SUSFS补丁应用可能有警告"
 cp "$KERNEL_WORKSPACE/SukiSU_patch/hooks/syscall_hooks.patch" ./ || error "复制syscall_hooks.patch失败"
 patch -p1 -F 3 < syscall_hooks.patch || info "syscall_hooks补丁应用可能有警告"
-if [ "${{ github.event.inputs.enable_feature_y }}" = "true" ]; then
+if [ "ENABLE_LZ4KD" = "true" ]; then
   git apply -p1 < 001-lz4.patch || true
   patch -p1 < 002-zstd.patch || true
 fi
@@ -257,7 +260,7 @@ CONFIG_KSU_SUSFS_SUS_SU=n
 CONFIG_KSU_MANUAL_HOOK=y
 CONFIG_KSU_SUSFS=y
 CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_PATH=n
+CONFIG_KSU_SUSFS_SUS_PATH=y
 CONFIG_KSU_SUSFS_SUS_MOUNT=y
 CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
 CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
