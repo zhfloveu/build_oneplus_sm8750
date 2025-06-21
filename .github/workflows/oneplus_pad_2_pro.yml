@@ -46,19 +46,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt update
-          for pkg in python3 git curl ccache; do
-            if ! command -v "$pkg" &> /dev/null; then
-              sudo apt install -y "$pkg"
-            else
-              upgradable=$(apt list --upgradable 2>/dev/null | grep -w "^$pkg/")
-              if [ -n "$upgradable" ]; then
-                sudo apt install -y "$pkg"
-              else
-                echo "$pkg 已是最新版"
-              fi
-            fi
-          done
+          sudo apt update && sudo apt upgrade -y
+          sudo apt install -y python3 git curl
+          sudo apt install -y python3 git curl ccache
 
 
       - name: Restore ccache
