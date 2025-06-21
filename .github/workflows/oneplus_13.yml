@@ -48,7 +48,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt update
+          sudo apt update || echo "apt update 返回非零状态码，可能有可升级的软件包，继续执行"
+          
           for pkg in python3 git curl ccache; do
             if ! command -v "$pkg" &> /dev/null; then
               sudo apt install -y "$pkg"
