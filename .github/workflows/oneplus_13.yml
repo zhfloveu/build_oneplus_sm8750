@@ -46,10 +46,12 @@ jobs:
          git config --global user.name "Q1udaoyu"
          git config --global user.email "sucisama2888@gmail.com"
 
-      - name: Install dependencies
+      
+      - name: Update and install dependencies
         run: |
-          sudo apt update || echo "apt update 返回非零状态码，可能有可升级的软件包，继续执行"
-          
+          # apt update 返回 100 是正常的，必须忽略返回值
+          sudo apt update || true
+      
           for pkg in python3 git curl ccache; do
             if ! command -v "$pkg" &> /dev/null; then
               sudo apt install -y "$pkg"
@@ -62,6 +64,7 @@ jobs:
               fi
             fi
           done
+        shell: bash
 
 
       - name: Restore ccache
