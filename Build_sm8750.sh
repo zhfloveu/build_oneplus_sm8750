@@ -249,10 +249,10 @@ apply_hmbird_patch
 
 # 返回common目录
 cd .. || error "返回common目录失败"
-
+cd arch/arm64/configs || error "进入configs目录失败"
+cp gki_defconfig gki_defconfig.tmpbak || error "配置备份失败"
 # 添加SUSFS配置
 info "添加SUSFS配置..."
-cd arch/arm64/configs || error "进入configs目录失败"
 echo -e "CONFIG_KSU=y
 CONFIG_KSU_SUSFS_SUS_SU=n
 CONFIG_KSU_MANUAL_HOOK=y
@@ -365,54 +365,56 @@ cp "$WORKSPACE/AnyKernel3/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip" "
 info "内核包路径: C:/Kernel_Build/${DEVICE_NAME}/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip"
 info "Image路径: C:/Kernel_Build/${DEVICE_NAME}/Image"
 info "请在C盘目录中查找内核包和Image文件。"
-info "正在重置源码到初始同步状态..."
-cd "$KERNEL_WORKSPACE" || error "进入源码目录失败"
 
-# 重置所有仓库到初始状态
-repo forall -c 'git reset --hard; git clean -fdx' || error "仓库重置失败"
+# ==================== 补丁管理函数 ====================
+clean_patches() {
+    info "清理所有补丁文件和修改..."
+    
+    # 1. 定义所有补丁目录的绝对路径
+    local patch_dirs=(
+        "$KERNEL_WORKSPACE/susfs4ksu"
+        "$KERNEL_WORKSPACE/kernel_patches"
+        "$KERNEL_WORKSPACE/SukiSU_patch"
+        "$KERNEL_WORKSPACE/kernel_platform/sched_ext"
+    )
+    
+    # 2. 删除所有补丁目录
+    for dir in "${patch_dirs[@]}"; do
+        if [ -d "$dir" ]; then
+            info "删除补丁目录: $(basename "$dir")"
+            rm -rf "$dir"
+        fi
+    done
+    
+    # 3. 恢复被修改的源码文件（通过Git）
+    info "恢复源码修改..."
+    cd "$KERNEL_WORKSPACE" || error "进入源码目录失败"
+    
+    # 使用repo遍历所有git仓库
+    repo forall -c '
+        echo "处理仓库: $REPO_PROJECT"
+        
+        # 检查是否有未提交的修改
+        if git diff --quiet; then
+            echo "  无修改，跳过"
+        else
+            echo "  重置修改..."
+            git reset --hard HEAD
+            git clean -fd
+        fi
+        
+        # 删除所有.orig文件（补丁备份）
+        find . -name "*.orig" -delete
+    '
+    
+    # 4. 删除构建产物但保留源码
+    info "清理构建产物..."
+    find "$KERNEL_WORKSPACE" -name "*.o" -delete
+    find "$KERNEL_WORKSPACE" -name "*.ko" -delete
+    find "$KERNEL_WORKSPACE" -name "*.cmd" -delete
+    rm -rf "$KERNEL_WORKSPACE/out" "$KERNEL_WORKSPACE/.tmp_versions"
+    mv "$KERNEL_WORKSPACE/kernel_platform/common/arch/arm64/configs/gki_defconfig.tmpbak" "$KERNEL_WORKSPACE/kernel_platform/common/arch/arm64/configs/gki_defconfig"
+}
 
-# 删除额外添加的补丁文件
-rm -rf susfs4ksu kernel_patches SukiSU_patch sched_ext || info "补丁目录已清理"
-info "源码已重置到初始同步状态！下次运行脚本将直接开始编译。"
-
-# 询问是否保留构建目录
-info "是否保留构建目录用于增量编译? (推荐保留以加速后续编译)"
-read -p "回车默认保留，请输入：[Y/n]: " keep_build
-keep_build=${keep_build:-Y}  # 默认值为 Y
-
-if [[ "$keep_build" =~ [yY] ]]; then
-    info "保留构建目录，下次可增量编译"
-    info "提示：如需完全清理，可手动删除目录:"
-    info "      $KERNEL_WORKSPACE/kernel_platform/common/out"
-else
-    info "清理构建目录..."
-    rm -rf "$KERNEL_WORKSPACE/kernel_platform/common/out"
-    info "构建目录已清理"
-fi
-
-# ==================== 最终清理阶段 ====================
-info "正在进行最终清理..."
-
-# 1. 保留源码和构建目录（增量编译用）
-info "保留以下目录供增量编译使用："
-info "- 源码目录: $KERNEL_WORKSPACE"
-info "- 构建目录: $KERNEL_WORKSPACE/kernel_platform/common/out"
-
-# 2. 强制删除 AnyKernel3 目录（避免旧刷机包残留）
-if [ -d "$WORKSPACE/AnyKernel3" ]; then
-    info "删除 AnyKernel3 打包目录..."
-    rm -rf "$WORKSPACE/AnyKernel3" || error "删除 AnyKernel3 目录失败"
-else
-    info "未检测到 AnyKernel3 目录，跳过删除"
-fi
-
-# 3. 保留 Windows 输出目录的文件（不删除已生成的刷机包）
-info "以下文件已保留在输出目录："
-info "- 内核镜像: /mnt/c/Kernel_Build/${DEVICE_NAME}/Image"
-info "- 刷机包: /mnt/c/Kernel_Build/${DEVICE_NAME}/AnyKernel3_*.zip"
-
-# 4. 提示下次编译流程
-info "下次编译时将："
-info "✓ 自动复用现有源码"
-info "✓ 增量编译修改部分"
-info "✓ 重新生成干净的 AnyKernel3 包"
+# ==================== 在编译完成后调用 ====================
+clean_patches
