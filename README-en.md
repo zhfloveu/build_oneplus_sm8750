@@ -7,7 +7,7 @@
 
 ### If you change the repo name when forking, please update the repository name in the usage instructions below by replacing `build_oneplus_sm8750` with your new repo name.
 
-<b>This project workflow is ported from </b>[![GitHub](https://img.shields.io/badge/-GitHub|@HanKuCha-181717?logo=github&logoColor=white&style=flat-square)](https://github.com/HanKuCha/oneplus13_a5p_sukisu)<br>
+<b>This project's build is made possible by: </b>[![GitHub](https://img.shields.io/badge/-GitHub|@HanKuCha-181717?logo=github&logoColor=white&style=flat-square)](https://github.com/HanKuCha/oneplus13_a5p_sukisu)<br>
 
 ---
 
