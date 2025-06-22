@@ -158,10 +158,6 @@ jobs:
            cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
            cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-           if [ "${{ github.event.inputs.enable_feature_y }}" = "true" ]; then
-              
-            fi
-
            # Apply patches
            cd ./common
 
