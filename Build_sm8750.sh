@@ -151,35 +151,11 @@ mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
 
 cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
 
-# 智能重置机制
-if [ -d "$KERNEL_WORKSPACE/.repo" ]; then
-    info "检测到已有源码，执行智能重置..."
-    cd "$KERNEL_WORKSPACE"
-    
-    # 选项1：完全清理（推荐）
-    read -p "是否彻底清理源码? (y-删除重建/n-保留并同步) [Y/n]: " clean_choice
-    if [[ "$clean_choice" =~ [nN] ]]; then
-        info "保留现有源码，尝试同步更新..."
-        repo sync -c -j$(nproc --all) --no-tags --force-sync || error "repo同步失败"
-    else
-        info "彻底清理源码重建..."
-        rm -rf "$KERNEL_WORKSPACE"
-        mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
-        cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
-        repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
-        repo sync -c -j$(nproc --all) --no-tags || error "repo同步失败"
-    fi
-else
-    info "初始化repo并同步源码..."
-    mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
-    cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
-    repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
-    repo sync -c -j$(nproc --all) --no-tags || error "repo同步失败"
-fi
+# 初始化源码
+info "初始化repo并同步源码..."
+repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
+repo --trace sync -c -j$(nproc --all) --no-tags || error "repo同步失败"
 
-# 确保补丁相关目录清理
-cd "$KERNEL_WORKSPACE"
-rm -rf susfs4ksu kernel_patches SukiSU_patch 2>/dev/null
 # ==================== 核心构建步骤 ====================
 
 # 清理保护导出
@@ -385,6 +361,7 @@ mkdir -p "$WIN_OUTPUT_DIR" || error "无法创建Windows目录，可能未挂载
 cp "$KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/Image" "$WIN_OUTPUT_DIR/"
 cp "$WORKSPACE/AnyKernel3/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip" "$WIN_OUTPUT_DIR/"
 
+rm -rf $WORKSPACE
 info "内核包路径: C:/Kernel_Build/${DEVICE_NAME}/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip"
 info "Image路径: C:/Kernel_Build/${DEVICE_NAME}/Image"
 info "请在C盘目录中查找内核包和Image文件。"
