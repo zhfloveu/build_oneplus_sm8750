@@ -151,12 +151,37 @@ mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
 
 cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
 
-# 初始化源码
-info "初始化repo并同步源码..."
-repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
-repo --trace sync -c -j$(nproc --all) --no-tags || error "repo同步失败"
+# 检查是否已初始化
+if [ ! -d ".repo" ]; then
+    info "执行完整初始化..."
+    repo init -u https://github.com/OnePlusOSS/kernel_manifest.git \
+              -b refs/heads/oneplus/sm8750 \
+              -m "$REPO_MANIFEST" \
+              --depth=1 \
+              --no-clone-bundle || error "初始化失败，正在清理后重试..."
+    
+else
+    info "检测到已有.repo目录"
+    
+    # 确保manifest存在
+    if [ ! -f ".repo/manifest.xml" ]; then
+        info "修复缺失的manifest..."
+        (cd .repo && \
+         git init && \
+         git remote add origin https://github.com/OnePlusOSS/kernel_manifest.git && \
+         git fetch origin refs/heads/oneplus/sm8750 --depth=1 && \
+         git checkout FETCH_HEAD)
+         
+        cp .repo/manifests/$REPO_MANIFEST .repo/manifest.xml
+    fi
+fi
 
-# ==================== 核心构建步骤 ====================
+# 执行同步
+info "开始同步代码..."
+repo sync -c -j$(nproc --all) --no-tags --force-sync --no-clone-bundle || {
+    echo "同步失败，正在重试..."
+    repo sync -c -j4 --no-tags --force-sync --no-clone-bundle
+}
 
 # 清理保护导出
 info "清理保护导出文件..."
