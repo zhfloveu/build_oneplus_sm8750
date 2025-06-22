@@ -151,52 +151,36 @@ mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
 
 cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
 
-# 确保 manifest 存在
-if [ ! -f ".repo/manifest.xml" ]; then
-    echo "修复 manifest..."
+# 智能重置机制
+if [ -d "$KERNEL_WORKSPACE/.repo" ]; then
+    info "检测到已有源码，执行智能重置..."
+    cd "$KERNEL_WORKSPACE"
     
-    # 创建 manifest 目录结构
-    mkdir -p .repo/manifests
-    git -C .repo init
-    git -C .repo remote add origin https://github.com/OnePlusOSS/kernel_manifest.git
-    
-    # 获取特定分支
-    git -C .repo fetch --depth=1 origin refs/heads/oneplus/sm8750
-    
-    # 在 manifests 目录中创建 master 分支
-    git -C .repo/manifests checkout -b master FETCH_HEAD
-    git -C .repo/manifests branch -u origin/oneplus/sm8750
-    
-    # 复制 manifest 文件
-    cp .repo/manifests/$REPO_MANIFEST .repo/manifest.xml
+    # 选项1：完全清理（推荐）
+    read -p "是否彻底清理源码? (y-删除重建/n-保留并同步) [Y/n]: " clean_choice
+    if [[ "$clean_choice" =~ [nN] ]]; then
+        info "保留现有源码，尝试同步更新..."
+        repo sync -c -j$(nproc --all) --no-tags --force-sync || error "repo同步失败"
+    else
+        info "彻底清理源码重建..."
+        rm -rf "$KERNEL_WORKSPACE"
+        mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
+        cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
+        repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
+        repo sync -c -j$(nproc --all) --no-tags || error "repo同步失败"
+    fi
+else
+    info "初始化repo并同步源码..."
+    mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
+    cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
+    repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m "$REPO_MANIFEST" --depth=1 || error "repo初始化失败"
+    repo sync -c -j$(nproc --all) --no-tags || error "repo同步失败"
 fi
 
-# 配置 repo 使用正确的分支
-cat > .repo/manifests.git/config <<EOF
-[core]
-	repositoryformatversion = 0
-	filemode = true
-	bare = true
-[remote "origin"]
-	url = https://github.com/OnePlusOSS/kernel_manifest.git
-	fetch = +refs/heads/oneplus/sm8750:refs/remotes/origin/oneplus/sm8750
-	fetch = +refs/heads/master:refs/remotes/origin/master
-[branch "master"]
-	remote = origin
-	merge = refs/heads/oneplus/sm8750
-EOF
-
-# 同步代码（带重试）
-echo "开始同步代码..."
-for i in {1..3}; do
-    repo sync -c -j4 --no-tags --force-sync --no-clone-bundle
-    if [ $? -eq 0 ]; then
-        echo "同步成功！"
-    fi
-    echo "同步失败，重试 $i/3..."
-    sleep 5
-done
-
+# 确保补丁相关目录清理
+cd "$KERNEL_WORKSPACE"
+rm -rf susfs4ksu kernel_patches SukiSU_patch 2>/dev/null
+# ==================== 核心构建步骤 ====================
 
 # 清理保护导出
 info "清理保护导出文件..."
@@ -404,64 +388,3 @@ cp "$WORKSPACE/AnyKernel3/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip" "
 info "内核包路径: C:/Kernel_Build/${DEVICE_NAME}/AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip"
 info "Image路径: C:/Kernel_Build/${DEVICE_NAME}/Image"
 info "请在C盘目录中查找内核包和Image文件。"
-
-# ==================== 补丁管理函数 ====================
-clean_patches() {
-    info "清理所有补丁文件和修改..."
-    
-    # 1. 定义所有补丁目录的绝对路径
-    local patch_dirs=(
-        "$KERNEL_WORKSPACE/susfs4ksu"
-        "$KERNEL_WORKSPACE/kernel_patches"
-        "$KERNEL_WORKSPACE/SukiSU_patch"
-        "$KERNEL_WORKSPACE/kernel_platform/sched_ext"
-        "$KERNEL_WORKSPACE/kernel_platform/KernelSU"
-        "$WORKSPACE/AnyKernel3"
-    )
-    
-    # 2. 删除所有补丁目录
-    for dir in "${patch_dirs[@]}"; do
-        if [ -d "$dir" ]; then
-            info "删除补丁目录: $(basename "$dir")"
-            rm -rf "$dir"
-        fi
-    done
-    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/Image
-    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/patch_linux
-    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/fs/sus_su.c
-    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/50_add_susfs_in_gki-android15-6.6.patch
-    rm -rf $KERNEL_WORKSPACE/kernel_platform/common/susfs.c
-
-
-    
-    # 3. 恢复被修改的源码文件（通过Git）
-    info "恢复源码修改..."
-    cd "$KERNEL_WORKSPACE" || error "进入源码目录失败"
-    
-    # 使用repo遍历所有git仓库
-    repo forall -c '
-        echo "处理仓库: $REPO_PROJECT"
-        
-        # 检查是否有未提交的修改
-        if git diff --quiet; then
-            echo "  无修改，跳过"
-        else
-            echo "  重置修改..."
-            git reset --hard HEAD
-            git clean -fd
-        fi
-        
-        # 删除所有.orig文件（补丁备份）
-        find . -name "*.orig" -delete
-    '
-    
-    # 4. 删除构建产物但保留源码
-    info "清理构建产物..."
-    find "$KERNEL_WORKSPACE" -name "*.o" -delete
-    find "$KERNEL_WORKSPACE" -name "*.ko" -delete
-    find "$KERNEL_WORKSPACE" -name "*.cmd" -delete
-    rm -rf "$KERNEL_WORKSPACE/out" "$KERNEL_WORKSPACE/.tmp_versions"
-}
-
-# ==================== 在编译完成后调用 ====================
-clean_patches
