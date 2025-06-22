@@ -1,0 +1,280 @@
+name: Kernel Builder for SM8750
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_choice:
+        description: "选择要编译的机型 (1-4)"
+        required: true
+        type: choice
+        options:
+          - 1
+          - 2
+          - 3
+          - 4
+      kernel_suffix:
+        description: "内核名称后缀 (平板设备专用)"
+        required: false
+        default: "-TG@qdykernel"
+      kernel_build_time:
+        description: "内核构建日期 (覆盖默认日期)"
+        required: false
+      enable_kpm:
+        description: "启用KPM支持"
+        type: boolean
+        default: true
+      enable_lz4kd:
+        description: "启用LZ4+ZSTD压缩"
+        type: boolean
+        default: true
+
+jobs:
+  build_kernel:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        device_config:
+          - choice: 1
+            name: "oneplus_ace5_pro"
+            manifest: "JiuGeFaCai_oneplus_ace5_pro_v.xml"
+            time: "Wed Dec 4 02:11:46 UTC 2024"
+            default_suffix: "-android15-TG@qdykernel"
+          - choice: 2
+            name: "oneplus_13"
+            manifest: "JiuGeFaCai_oneplus_13_v.xml"
+            time: "Tue Dec 17 23:36:49 UTC 2024"
+            default_suffix: "-android15-TG@qdykernel"
+          - choice: 3
+            name: "oneplus_13t"
+            manifest: "oneplus_13t.xml"
+            time: "Tue Dec 17 23:36:49 UTC 2024"
+            default_suffix: "-android15-TG@qdykernel"
+          - choice: 4
+            name: "oneplus_pad_2_pro"
+            manifest: "oneplus_pad_2_pro.xml"
+            time: "Tue Dec 17 23:36:49 UTC 2024"
+            default_suffix: "-TG@qdykernel"
+      include: ${{ fromJSON(format('[{{"choice":{0}}}', inputs.device_choice)) }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup environment
+      run: |
+        echo "DEVICE_NAME=${{ matrix.device_config.name }}" >> $GITHUB_ENV
+        echo "REPO_MANIFEST=${{ matrix.device_config.manifest }}" >> $GITHUB_ENV
+        echo "DEFAULT_SUFFIX=${{ matrix.device_config.default_suffix }}" >> $GITHUB_ENV
+        
+        # 设置内核构建时间
+        if [ -n "${{ inputs.kernel_build_time }}" ]; then
+          echo "KERNEL_TIME=${{ inputs.kernel_build_time }}" >> $GITHUB_ENV
+        else
+          echo "KERNEL_TIME=${{ matrix.device_config.time }}" >> $GITHUB_ENV
+        fi
+        
+        # 设置内核后缀
+        if [ "${{ matrix.device_config.name }}" = "oneplus_pad_2_pro" ]; then
+          echo "KERNEL_SUFFIX=${{ inputs.kernel_suffix }}" >> $GITHUB_ENV
+        else
+          echo "KERNEL_SUFFIX=${{ matrix.device_config.default_suffix }}" >> $GITHUB_ENV
+        fi
+        
+        echo "ENABLE_KPM=${{ inputs.enable_kpm }}" >> $GITHUB_ENV
+        echo "ENABLE_LZ4KD=${{ inputs.enable_lz4kd }}" >> $GITHUB_ENV
+        echo "WORKSPACE=$(pwd)/kernel_${DEVICE_NAME}" >> $GITHUB_ENV
+        echo "KERNEL_WORKSPACE=$WORKSPACE/kernel_workspace" >> $GITHUB_ENV
+        echo "CCACHE_DIR=$WORKSPACE/ccache" >> $GITHUB_ENV
+        echo "CCACHE_MAXSIZE=8G" >> $GITHUB_ENV
+    
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y python3 git curl ccache flex bison libssl-dev libelf-dev bc zip
+        
+        # 配置Git
+        git config --global user.name "Q1udaoyu"
+        git config --global user.email "sucisama2888@gmail.com"
+        
+        # 安装repo工具
+        curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
+        chmod a+x ~/repo
+        sudo mv ~/repo /usr/local/bin/repo
+    
+    - name: Setup ccache
+      run: |
+        mkdir -p $CCACHE_DIR
+        ccache -M $CCACHE_MAXSIZE
+        ccache -s
+    
+    - name: Prepare workspace
+      run: |
+        mkdir -p $KERNEL_WORKSPACE
+        cd $KERNEL_WORKSPACE
+    
+    - name: Initialize repo source
+      run: |
+        repo init -u https://github.com/OnePlusOSS/kernel_manifest.git \
+          -b refs/heads/oneplus/sm8750 \
+          -m $REPO_MANIFEST \
+          --depth=1
+        repo sync -c -j$(nproc) --no-tags
+    
+    - name: Apply patches and modifications
+      run: |
+        cd $KERNEL_WORKSPACE/kernel_platform
+        
+        # 清理保护导出文件
+        rm -f common/android/abi_gki_protected_exports_*
+        rm -f msm-kernel/android/abi_gki_protected_exports_*
+        
+        # 设置SukiSU
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/susfs-1.5.8/kernel/setup.sh" | bash -s susfs-1.5.8
+        cd KernelSU
+        KSU_VERSION=$(expr $(git rev-list --count main) "+" 10700)
+        echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
+        sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+        
+        # 克隆额外仓库
+        cd $KERNEL_WORKSPACE
+        git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android15-6.6
+        git clone https://github.com/Xiaomichael/kernel_patches.git
+        git clone https://github.com/SukiSU-Ultra/SukiSU_patch.git
+        
+        # 复制文件
+        cd kernel_platform
+        cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
+        cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
+        cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+        
+        if [ "$ENABLE_LZ4KD" = "true" ]; then
+          cp ../kernel_patches/001-lz4.patch ./common/
+          cp ../kernel_patches/lz4armv8.S ./common/lib
+          cp ../kernel_patches/002-zstd.patch ./common/
+        fi
+        
+        # 应用补丁
+        cd common
+        if [ "$DEVICE_NAME" != "oneplus_13t" ]; then
+          sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-android15-6.6.patch
+          sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-android15-6.6.patch
+        fi
+        
+        patch -p1 < 50_add_susfs_in_gki-android15-6.6.patch
+        cp "$KERNEL_WORKSPACE/SukiSU_patch/hooks/syscall_hooks.patch" ./
+        patch -p1 -F 3 < syscall_hooks.patch
+        
+        if [ "$ENABLE_LZ4KD" = "true" ]; then
+          git apply -p1 < 001-lz4.patch || true
+          patch -p1 < 002-zstd.patch || true
+        fi
+        
+        # 应用HMBird补丁
+        cd drivers
+        curl -sSLO https://raw.githubusercontent.com/showdo/build_oneplus_sm8750/main/hmbird_patch.c
+        if ! grep -q "hmbird_patch.o" Makefile; then
+          echo "obj-y += hmbird_patch.o" >> Makefile
+        fi
+        
+        # 添加配置到defconfig
+        cd ../../arch/arm64/configs
+        cat << EOF >> gki_defconfig
+        CONFIG_KSU=y
+        CONFIG_KSU_SUSFS_SUS_SU=n
+        CONFIG_KSU_MANUAL_HOOK=y
+        CONFIG_KSU_SUSFS=y
+        CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
+        CONFIG_KSU_SUSFS_SUS_PATH=n
+        CONFIG_KSU_SUSFS_SUS_MOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
+        CONFIG_KSU_SUSFS_SUS_KSTAT=y
+        CONFIG_KSU_SUSFS_TRY_UMOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
+        CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+        CONFIG_KSU_SUSFS_ENABLE_LOG=y
+        CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+        CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+        CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+        CONFIG_CRYPTO_LZ4HC=y
+        CONFIG_CRYPTO_LZ4=y
+        CONFIG_CRYPTO_LZ4K=y
+        CONFIG_CRYPTO_842=y
+        # BBR
+        CONFIG_TCP_CONG_ADVANCED=y
+        CONFIG_TCP_CONG_BBR=y
+        CONFIG_NET_SCH_FQ=y
+        CONFIG_TCP_CONG_BIC=n
+        CONFIG_TCP_CONG_CUBIC=n
+        CONFIG_TCP_CONG_WESTWOOD=n
+        CONFIG_TCP_CONG_HTCP=n
+        CONFIG_DEFAULT_TCP_CONG=bbr
+        CONFIG_LOCALVERSION_AUTO=n
+        EOF
+        
+        if [ "$ENABLE_KPM" = "true" ]; then
+          echo "CONFIG_KPM=y" >> gki_defconfig
+        fi
+        
+        # 修改内核名称
+        sudo sed -i "s/-4k/${KERNEL_SUFFIX}/g" gki_defconfig
+        cd $KERNEL_WORKSPACE/kernel_platform
+        sed -i 's/${scm_version}//' common/scripts/setlocalversion
+        sudo sed -i 's/check_defconfig//' common/build.config.gki
+        
+        # 应用完美风驰补丁
+        git clone https://github.com/HanKuCha/sched_ext.git
+        cp -r ./sched_ext/* ./common/kernel/sched
+        rm -rf ./sched_ext/.git
+    
+    - name: Build kernel
+      run: |
+        cd $KERNEL_WORKSPACE/kernel_platform/common
+        
+        # 设置构建环境
+        export KBUILD_BUILD_TIMESTAMP="$KERNEL_TIME"
+        export PATH="$KERNEL_WORKSPACE/kernel_platform/prebuilts/clang/host/linux-x86/clang-r510928/bin:$PATH"
+        export PATH="/usr/lib/ccache:$PATH"
+        
+        # 生成配置
+        make -j$(nproc) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang \
+          RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
+          PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
+          LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2 gki_defconfig
+        
+        # 编译内核
+        make -j$(nproc) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang \
+          RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
+          PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
+          LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2 Image
+        
+        # 应用Linux补丁
+        cd out/arch/arm64/boot
+        curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux
+        chmod +x patch_linux
+        ./patch_linux
+        rm -f Image
+        mv oImage Image
+    
+    - name: Package kernel
+      run: |
+        cd $WORKSPACE
+        git clone https://github.com/Kernel-SU/AnyKernel3.git
+        rm -rf ./AnyKernel3/.git
+        rm -f ./AnyKernel3/push.sh
+        cp $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/Image ./AnyKernel3/
+        
+        cd AnyKernel3
+        zip -r "AnyKernel3_${KSU_VERSION}_${DEVICE_NAME}_SuKiSu.zip" ./*
+        
+        # 创建输出目录
+        mkdir -p $WORKSPACE/output
+        mv *.zip $WORKSPACE/output/
+        cp $KERNEL_WORKSPACE/kernel_platform/common/out/arch/arm64/boot/Image $WORKSPACE/output/
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: kernel-${{ env.DEVICE_NAME }}-${{ env.KSU_VERSION }}
+        path: |
+          ${{ env.WORKSPACE }}/output/*
