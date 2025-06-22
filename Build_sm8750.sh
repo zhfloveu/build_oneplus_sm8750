@@ -151,37 +151,52 @@ mkdir -p "$KERNEL_WORKSPACE" || error "无法创建kernel_workspace目录"
 
 cd "$KERNEL_WORKSPACE" || error "无法进入kernel_workspace目录"
 
-# 检查是否已初始化
-if [ ! -d ".repo" ]; then
-    info "执行完整初始化..."
-    repo init -u https://github.com/OnePlusOSS/kernel_manifest.git \
-              -b refs/heads/oneplus/sm8750 \
-              -m "$REPO_MANIFEST" \
-              --depth=1 \
-              --no-clone-bundle || error "初始化失败，正在清理后重试..."
+# 确保 manifest 存在
+if [ ! -f ".repo/manifest.xml" ]; then
+    echo "修复 manifest..."
     
-else
-    info "检测到已有.repo目录"
+    # 创建 manifest 目录结构
+    mkdir -p .repo/manifests
+    git -C .repo init
+    git -C .repo remote add origin https://github.com/OnePlusOSS/kernel_manifest.git
     
-    # 确保manifest存在
-    if [ ! -f ".repo/manifest.xml" ]; then
-        info "修复缺失的manifest..."
-        (cd .repo && \
-         git init && \
-         git remote add origin https://github.com/OnePlusOSS/kernel_manifest.git && \
-         git fetch origin refs/heads/oneplus/sm8750 --depth=1 && \
-         git checkout FETCH_HEAD)
-         
-        cp .repo/manifests/$REPO_MANIFEST .repo/manifest.xml
-    fi
+    # 获取特定分支
+    git -C .repo fetch --depth=1 origin refs/heads/oneplus/sm8750
+    
+    # 在 manifests 目录中创建 master 分支
+    git -C .repo/manifests checkout -b master FETCH_HEAD
+    git -C .repo/manifests branch -u origin/oneplus/sm8750
+    
+    # 复制 manifest 文件
+    cp .repo/manifests/$REPO_MANIFEST .repo/manifest.xml
 fi
 
-# 执行同步
-info "开始同步代码..."
-repo sync -c -j$(nproc --all) --no-tags --force-sync --no-clone-bundle || {
-    echo "同步失败，正在重试..."
+# 配置 repo 使用正确的分支
+cat > .repo/manifests.git/config <<EOF
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = true
+[remote "origin"]
+	url = https://github.com/OnePlusOSS/kernel_manifest.git
+	fetch = +refs/heads/oneplus/sm8750:refs/remotes/origin/oneplus/sm8750
+	fetch = +refs/heads/master:refs/remotes/origin/master
+[branch "master"]
+	remote = origin
+	merge = refs/heads/oneplus/sm8750
+EOF
+
+# 同步代码（带重试）
+echo "开始同步代码..."
+for i in {1..3}; do
     repo sync -c -j4 --no-tags --force-sync --no-clone-bundle
-}
+    if [ $? -eq 0 ]; then
+        echo "同步成功！"
+    fi
+    echo "同步失败，重试 $i/3..."
+    sleep 5
+done
+
 
 # 清理保护导出
 info "清理保护导出文件..."
