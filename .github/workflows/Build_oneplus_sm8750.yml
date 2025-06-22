@@ -92,7 +92,7 @@ jobs:
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y python3 git curl ccache
 
-      - name: 📥 Restore ccache (恢复 机型：${{ env.REPO_MANIFEST }}的 ccache 缓存)
+      - name: 📥 Restore ccache (恢复 机型：${{ env.DEVICES_NAME }}的 ccache 缓存)
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
@@ -309,5 +309,5 @@ jobs:
       - name: 📤 Upload AnyKernel3 (上传 AnyKernel3)
         uses: actions/upload-artifact@v4
         with:
-         name: AnyKernel3_${{ env.KSUVER }}_${DEVICES_NAME}_SuKiSU
+         name: AnyKernel3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_SuKiSU
          path: ./AnyKernel3/*
