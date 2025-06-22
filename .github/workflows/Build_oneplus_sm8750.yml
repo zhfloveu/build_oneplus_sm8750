@@ -301,7 +301,7 @@ jobs:
          
       - name: 📦 Make AnyKernel3 (创建AnyKernel3)
         run: |
-         git clone https://github.com/Kernel-SU/AnyKernel3.git --depth=1      
+         git clone https://github.com/showdo/AnyKernel3.git --depth=1      
          rm -rf ./AnyKernel3/.git
          rm -rf ./AnyKernel3/push.sh
          cp kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image ./AnyKernel3/
