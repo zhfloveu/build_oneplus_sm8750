@@ -96,7 +96,7 @@ jobs:
         run: |
           if [ ! -d "/var/lib/apt/lists" ] || [ -z "$(ls -A /var/lib/apt/lists)" ]; then
             echo "更新APT包列表..."
-            sudo apt update
+            sudo apt update -qq
           else
             echo "使用缓存的APT列表"
           fi
@@ -105,10 +105,18 @@ jobs:
           sudo apt install -y --no-install-recommends \
             python3 git curl ccache libelf-dev \
             build-essential flex bison libssl-dev \
-            libncurses-dev liblz4-tool zlib1g-dev
+            libncurses-dev liblz4-tool zlib1g-dev \
+            libxml2-utils rsync unzip
+
+          echo "清理APT锁文件和临时文件..."
+          sudo rm -f /var/lib/apt/lists/lock
+          sudo rm -f /var/cache/apt/archives/lock
+          sudo rm -rf /var/lib/apt/lists/partial
+          sudo rm -rf /var/cache/apt/archives/partial
+          sudo rm -f /var/lib/dpkg/lock*
           
-          # 验证ccache安装
           ccache --version
+          echo "依赖安装完成"
 
       - name: 📥 Restore ccache (恢复 机型：${{ env.DEVICES_NAME }}的 ccache 缓存)
         uses: actions/cache@v3
