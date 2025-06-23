@@ -39,15 +39,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 🚀 Maximize build space (最大化构建空间)
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 8192
-          temp-reserve-mb: 2048
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
+      - name: 📊 Check disk space (检查磁盘空间)
+        run: |
+          echo "构建前磁盘空间："
+          df -h
 
       - name: ⚙️ Set REPO_MANIFEST (设置对应机型配置文件)
         id: set_manifest
@@ -87,10 +82,33 @@ jobs:
           git config --global user.name "Q1udaoyu"
           git config --global user.email "sucisama2888@gmail.com"
 
+      - name: 🛠 Cache APT packages (缓存APT包)
+        uses: actions/cache@v3
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/Build_oneplus_sm8750.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       - name: 📦 Install dependencies (安装依赖)
         run: |
-          sudo apt update && sudo apt upgrade -y
-          sudo apt install -y python3 git curl ccache
+          if [ ! -d "/var/lib/apt/lists" ] || [ -z "$(ls -A /var/lib/apt/lists)" ]; then
+            echo "更新APT包列表..."
+            sudo apt update
+          else
+            echo "使用缓存的APT列表"
+          fi
+          
+          echo "安装构建依赖..."
+          sudo apt install -y --no-install-recommends \
+            python3 git curl ccache libelf-dev \
+            build-essential flex bison libssl-dev \
+            libncurses-dev liblz4-tool zlib1g-dev
+          
+          # 验证ccache安装
+          ccache --version
 
       - name: 📥 Restore ccache (恢复 机型：${{ env.DEVICES_NAME }}的 ccache 缓存)
         uses: actions/cache@v3
@@ -174,19 +192,33 @@ jobs:
 
            
            echo "完成"
+
+      - name: 🔧 Cache HMBird patch (缓存HMBird补丁)
+        uses: actions/cache@v3
+        with:
+          path: ${{ runner.temp }}/hmbird_patch.c
+          key: hmbird-patch-v1
+          restore-keys: |
+            hmbird-patch-v1
+            
       
       - name: 🔧 Apply HMBird GKI patch (写入单Boot开机补丁)
         run: |
-         cd kernel_workspace/kernel_platform/common/drivers
-         curl -sSLo hmbird_patch.c https://raw.githubusercontent.com/showdo/build_oneplus_sm8750/main/hmbird_patch.c
-         grep -q "MODULE_DESCRIPTION" hmbird_patch.c
-         if ! grep -q "hmbird_patch.o" Makefile; then
-         echo "obj-y += hmbird_patch.o" >> Makefile
-         fi
-         cd ../../../
-         git add -A
-         git commit -m "Add HMBird GKI patch" || true
+          PATCH_FILE="${{ runner.temp }}/hmbird_patch.c"
+          if [ ! -f "$PATCH_FILE" ]; then
+            echo "下载HMBird补丁..."
+            curl -sSLo "$PATCH_FILE" https://raw.githubusercontent.com/showdo/build_oneplus_sm8750/main/hmbird_patch.c
+          fi
+          
+          cd kernel_workspace/kernel_platform/common/drivers
+          cp "$PATCH_FILE" hmbird_patch.c
+          
+          if ! grep -q "hmbird_patch.o" Makefile; then
+            echo "obj-y += hmbird_patch.o" >> Makefile
+          fi
+          echo "HMBird补丁应用完成"
 
+          
       - name: 🔧 Update compression algorithms (更新压缩算法)
         if: ${{ inputs.enable_feature_y }}
         run: |
@@ -326,3 +358,8 @@ jobs:
         with:
          name: AnyKernel3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_SuKiSU
          path: ./AnyKernel3/*
+         
+      - name: 📊 Post-build disk check (构建后空间检查)
+        run: |
+          echo "构建后磁盘空间："
+          df -h
