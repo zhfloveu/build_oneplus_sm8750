@@ -156,13 +156,24 @@ jobs:
          
       - name: ⚙️ Set up SukiSU Ultra (配置 SukiSU Ultra)
         run: |
-         cd kernel_workspace/kernel_platform
-         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
-         cd ./KernelSU
-         KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10700)
-         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-         export KSU_VERSION=$KSU_VERSION
-         sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+          cd kernel_workspace/kernel_platform
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+          cd ./KernelSU
+
+          git remote add upstream https://github.com/SukiSU-Ultra/SukiSU-Ultra.git || true
+          git fetch upstream --tags
+
+          git checkout -B susfs-main upstream/susfs-main
+
+          RELEASE_VERSION=$(git tag --list "v*" --sort=-creatordate | head -n 1)
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          KSU_VERSION="${RELEASE_VERSION}-${COMMIT_HASH}@${BRANCH_NAME}"
+
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+          export KSU_VERSION=$KSU_VERSION
+
+          sed -i "s/DKSU_VERSION=.*/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
       
         
       - name: 🔧 Set up SUSFS (配置 SUSFS)
