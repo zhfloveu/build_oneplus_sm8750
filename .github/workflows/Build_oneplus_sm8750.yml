@@ -86,7 +86,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /var/lib/apt/lists
-          key: ${{ runner.os }}-apt-${{ hashFiles('build_oneplus_sm8750/.github/workflows/Build_oneplus_sm8750.yml') }}
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/Build_oneplus_sm8750.yml') }}
           restore-keys: |
             ${{ runner.os }}-apt-
 
@@ -108,7 +108,7 @@ jobs:
           echo "依赖安装完成"
 
           
-      - name: 📥 Restore ccache (恢复 机型：${{ env.DEVICES_NAME }}的 ccache 缓存)
+      - name: 📥 Restore ccache (载入 机型：${{ env.DEVICES_NAME }}的 ccache 缓存)
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
@@ -149,7 +149,7 @@ jobs:
       - name: 📥 Initialize repo and sync (初始化repo并同步内核源码)
         run: |
          mkdir kernel_workspace && cd kernel_workspace
-         repo init -u https://github.com/HanKuCha/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m ${REPO_MANIFEST}.xml --depth=1
+         repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m ${REPO_MANIFEST}.xml --depth=1
          repo --trace sync -c -j$(nproc --all) --no-tags
          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
