@@ -353,23 +353,21 @@ jobs:
           echo "保持原设置: $KEEP_ORIGINAL"
           echo "自定义后缀: $CUSTOM_SUFFIX"
           echo "默认后缀: $DEFAULT_SUFFIX"
-          sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
-           sudo sed -i 's/-4k/$DEFAULT_SUFFIX/g' ./common/arch/arm64/configs/gki_defconfig
           
           if [ "$KEEP_ORIGINAL" = "false" ]; then
             if [ -n "$CUSTOM_SUFFIX" ]; then
-              suffix="$CUSTOM_SUFFIX"
+              DEFAULT_SUFFIX="$CUSTOM_SUFFIX"
               echo "使用自定义内核名称: $suffix"
             else
-              suffix="$DEFAULT_SUFFIX"
+              DEFAULT_SUFFIX="$DEFAULT_SUFFIX"
               echo "使用机型默认内核名称: $suffix"
             fi
-
-            ESCAPED_SUFFIX=$(printf '%s\n' "$suffix" | sed 's:[\/&]:\\&:g')
-            sudo sed -i "s/-4k/$ESCAPED_SUFFIX/g" ./common/arch/arm64/configs/gki_defconfig
           else
             echo "保持原内核名称设置"
           fi
+          ESCAPED_SUFFIX=$(printf '%s\n' "$DEFAULT_SUFFIX" | sed 's:[\/&]:\\&:g')
+          sudo sed -i "s/-4k/$ESCAPED_SUFFIX/g" ./common/arch/arm64/configs/gki_defconfig
+          sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
           
       - name: 🔧 Add sched_ext (写入风驰补丁)
         if: ${{inputs.enable_feature_z }}
