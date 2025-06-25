@@ -370,8 +370,6 @@ jobs:
             echo "保持原内核名称设置"
           fi
           
-          sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
-          
       - name: 🔧 Add sched_ext (写入风驰补丁)
         if: ${{inputs.enable_feature_z }}
         run: |
