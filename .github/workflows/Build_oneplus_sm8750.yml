@@ -12,25 +12,40 @@ on:
           - 'oneplus_13t'
           - 'oneplus_pad_2_pro'
         default: 'oneplus_ace5_pro'
-      KERNEL_SUFFIX:
-        description: '内核名称修改(可改中文和emoji)'
-        required: true
-        default: '-android15-8-g013ec21bba94-abogki383916444-4k'
+
+      keep_original_settings:
+        description: "✅ 保持原内核名称及构建时间"
+        required: false
+        default: true
+        type: boolean
+
+      custom_kernel_suffix:
+        description: "✏️ 自定义内核名称(可改中文和emoji) - 仅在取消勾选'保持原设置'时有效"
+        required: false
+        default: ''
+      
+      custom_kernel_time:
+        description: "⏰ 自定义构建时间(格式示例：Tue Dec 17 23:36:49 UTC 2024) - 仅在取消勾选'保持原设置'时有效"
+        required: false
+        default: ''
+      
       enable_feature_x:
-       description: "启用kpm"
-       required: false
-       default: true
-       type: boolean
+        description: "启用kpm"
+        required: false
+        default: true
+        type: boolean
+        
       enable_feature_y:
-       description: "启用lz4+zstd"
-       required: false
-       default: true
-       type: boolean
+        description: "启用lz4+zstd"
+        required: false
+        default: true
+        type: boolean
+        
       enable_feature_z:
-       description: "添加风驰驱动"
-       required: false
-       default: true
-       type: boolean
+        description: "添加风驰驱动"
+        required: false
+        default: true
+        type: boolean
       
        
 
@@ -43,7 +58,7 @@ jobs:
         run: |
           echo "构建前磁盘空间："
           df -h
-
+      
       - name: ⚙️ Set REPO_MANIFEST (设置对应机型配置文件)
         id: set_manifest
         run: |
@@ -62,16 +77,25 @@ jobs:
               ;;
           esac
 
-      - name: ⚙️ Set KERNEL_TIME (设置对应机型构建时间)
+      - name: ⚙️ Set KERNEL_TIME (设置构建时间)
+        id: set_kernel_time
         run: |
-          case "${{ github.event.inputs.REPO_MANIFEST }}" in
-            oneplus_13 | oneplus_13t)
-              echo 'KERNEL_TIME=Tue Dec 17 23:36:49 UTC 2024' >> $GITHUB_ENV
-              ;;
-            *)
-              echo 'KERNEL_TIME=Wed Dec 4 02:11:46 UTC 2024' >> $GITHUB_ENV
-              ;;
-          esac
+          if [ "$KEEP_ORIGINAL" = "false" ] && [ -n "$CUSTOM_TIME" ]; then
+            echo "使用自定义构建时间: $CUSTOM_TIME"
+            echo "KERNEL_TIME=$CUSTOM_TIME" >> $GITHUB_ENV
+          else
+            case "${{ inputs.REPO_MANIFEST }}" in
+              oneplus_13 | oneplus_ace5_pro)
+                echo 'KERNEL_TIME=Tue Dec 17 23:36:49 UTC 2024' >> $GITHUB_ENV
+                ;;
+              oneplus_13t)
+                echo 'KERNEL_TIME=FriApr 25 01:56:53 UTC 2025' >> $GITHUB_ENV
+                ;;
+              oneplus_pad_2_pro)
+                echo 'KERNEL_TIME=Wed Dec 11 19:16:38 UTC 2024' >> $GITHUB_ENV
+                ;;
+            esac
+          fi
 
       - name: ⚙️ Set device-specific CCACHE_DIR (设置对应机型Cceche路径)
         run: |
@@ -300,10 +324,40 @@ jobs:
 
       - name: 🔧 Set Kernel name (设置内核名称)
         run: |
-         cd kernel_workspace/kernel_platform
-         sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
-         sudo sed -i 's/-4k/${{ github.event.inputs.KERNEL_SUFFIX }}/g' ./common/arch/arm64/configs/gki_defconfig
-        
+          cd kernel_workspace/kernel_platform
+
+          case "${{ github.event.inputs.REPO_MANIFEST }}" in
+            oneplus_13 | oneplus_ace5_pro)
+              DEFAULT_SUFFIX="-android15-8-g013ec21bba94-abogki383916444-4k "
+              ;;
+            oneplus_13t)
+              DEFAULT_SUFFIX="-android15-8-gba3bcfd39307-a bogki413159095-4k"
+              ;;
+            oneplus_pad_2_pro)
+              DEFAULT_SUFFIX="-android15-8-g0261dbe3cf7e-ab12786384-4k"
+              ;;
+          esac
+          
+          KEEP_ORIGINAL=${{ format('{0}', inputs.keep_original_settings) }}
+          CUSTOM_SUFFIX=${{ format('{0}', inputs.custom_kernel_suffix) }}
+          
+          echo "keep_original_settings: $KEEP_ORIGINAL (类型: ${KEEP_ORIGINAL+string})"
+          echo "custom_kernel_suffix: $CUSTOM_SUFFIX"
+          if [ "$KEEP_ORIGINAL" = "false" ]; then
+            if [ -n "$CUSTOM_SUFFIX" ]; then
+              suffix="$CUSTOM_SUFFIX"
+              echo "使用自定义内核名称: $suffix"
+            else
+              suffix="$DEFAULT_SUFFIX"
+              echo "使用机型默认内核名称: $suffix"
+            fi
+            sudo sed -i "s/-4k/$suffix/g" ./common/arch/arm64/configs/gki_defconfig
+          else
+            echo "保持原内核名称设置"
+          fi
+          
+          sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
+          
       - name: 🔧 Add sched_ext (写入风驰补丁)
         if: ${{inputs.enable_feature_z }}
         run: |
