@@ -323,26 +323,30 @@ jobs:
           git add -A && git commit -a -m "BUILD Kernel"
 
       - name: 🔧 Set Kernel name (设置内核名称)
+        env:
+          REPO_MANIFEST: ${{ github.event.inputs.REPO_MANIFEST }}
+          KEEP_ORIGINAL: ${{ github.event.inputs.keep_original_settings }}
+          CUSTOM_SUFFIX: ${{ github.event.inputs.custom_kernel_suffix }}
         run: |
           cd kernel_workspace/kernel_platform
 
-          case "${{ github.event.inputs.REPO_MANIFEST }}" in
+          case "$REPO_MANIFEST" in
             oneplus_13 | oneplus_ace5_pro)
-              DEFAULT_SUFFIX="-android15-8-g013ec21bba94-abogki383916444-4k "
+              DEFAULT_SUFFIX="-android15-8-g013ec21bba94-abogki383916444-4k"
               ;;
             oneplus_13t)
-              DEFAULT_SUFFIX="-android15-8-gba3bcfd39307-a bogki413159095-4k"
+              DEFAULT_SUFFIX="-android15-8-gba3bcfd39307-abogki413159095-4k"
               ;;
             oneplus_pad_2_pro)
               DEFAULT_SUFFIX="-android15-8-g0261dbe3cf7e-ab12786384-4k"
               ;;
           esac
           
-          KEEP_ORIGINAL=${{ format('{0}', inputs.keep_original_settings) }}
-          CUSTOM_SUFFIX=${{ format('{0}', inputs.custom_kernel_suffix) }}
+          echo "当前机型: $REPO_MANIFEST"
+          echo "保持原设置: $KEEP_ORIGINAL"
+          echo "自定义后缀: $CUSTOM_SUFFIX"
+          echo "默认后缀: $DEFAULT_SUFFIX"
           
-          echo "keep_original_settings: $KEEP_ORIGINAL (类型: ${KEEP_ORIGINAL+string})"
-          echo "custom_kernel_suffix: $CUSTOM_SUFFIX"
           if [ "$KEEP_ORIGINAL" = "false" ]; then
             if [ -n "$CUSTOM_SUFFIX" ]; then
               suffix="$CUSTOM_SUFFIX"
@@ -351,7 +355,9 @@ jobs:
               suffix="$DEFAULT_SUFFIX"
               echo "使用机型默认内核名称: $suffix"
             fi
-            sudo sed -i "s/-4k/$suffix/g" ./common/arch/arm64/configs/gki_defconfig
+
+            ESCAPED_SUFFIX=$(printf '%s\n' "$suffix" | sed 's:[\/&]:\\&:g')
+            sudo sed -i "s/-4k/$ESCAPED_SUFFIX/g" ./common/arch/arm64/configs/gki_defconfig
           else
             echo "保持原内核名称设置"
           fi
