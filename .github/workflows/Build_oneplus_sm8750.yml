@@ -112,7 +112,7 @@ jobs:
           path: |
             /var/cache/apt
             /etc/apt
-          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/build_sm8750.yaml') }}
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/Build_oneplus_sm8750.yaml') }}
           restore-keys: |
             ${{ runner.os }}-apt-
 
