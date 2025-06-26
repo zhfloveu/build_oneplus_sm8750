@@ -65,10 +65,10 @@ read -p "输入内核构建日期更改(回车默认为原厂) : " input_time
 [ -n "$input_time" ] && KERNEL_TIME="$input_time"
 
 read -p "是否启用kpm?(回车默认开启) [y/N]: " kpm
-[[ "$kpm" =~ [yY] ]] && ENABLE_KPM=true
+[[ "$kpm" =~ [nN] ]] && ENABLE_KPM=false
 
 read -p "是否启用lz4+zstd?(回车默认开启) [y/N]: " lz4
-[[ "$lz4" =~ [yY] ]] && ENABLE_LZ4KD=true
+[[ "$lz4" =~ [nN] ]] && ENABLE_LZ4KD=false
 
 # 环境变量 - 按机型区分ccache目录
 export CCACHE_COMPILERCHECK="%compiler% -dumpmachine; %compiler% -dumpversion"
