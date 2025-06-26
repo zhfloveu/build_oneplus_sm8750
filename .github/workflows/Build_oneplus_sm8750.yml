@@ -20,17 +20,17 @@ on:
         type: boolean
 
       custom_kernel_suffix:
-        description: "✏️ 自定义内核名称(可改中文和emoji) - 仅在取消勾选'保持原设置'时有效"
+        description: "✏️ 自定义内核名称(可中文和emoji) - 仅在取消勾选'保持原设置'时有效"
         required: false
         default: ''
       
       custom_kernel_time:
-        description: "⏰ 自定义构建时间(格式示例：Tue Dec 17 23:36:49 UTC 2024) - 仅在取消勾选'保持原设置'时有效"
+        description: "⏰ 自定义构建时间(示例：Tue Dec 17 23:36:49 UTC 2024) - 仅在取消勾选'保持原设置'时有效"
         required: false
         default: ''
       
       enable_feature_x:
-        description: "启用kpm"
+        description: "生成无KPM的AK3 - 取消则只有有KPM的AK3"
         required: false
         default: true
         type: boolean
@@ -271,8 +271,6 @@ jobs:
           echo "✅ LZ4/Zstd 算法更新完成"
 
       - name: 🔧 Set gki_defconfig (设置编译配置)
-        env:
-          ENABLE_FEATURE_X: "${{ inputs.enable_feature_x }}"
         run: |
           cd kernel_workspace/kernel_platform
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -280,9 +278,7 @@ jobs:
           # Add VFS configuration settings
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
-          if [ "$ENABLE_FEATURE_X" = "true" ]; then
-            echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
-          fi
+          echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
           # 启用高级压缩支持
           echo "CONFIG_CRYPTO_LZ4=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_LZ4HC=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -349,7 +345,7 @@ jobs:
               ;;
           esac
           
-          echo "当前机型: $REPO_MANIFEST"
+          echo "当前机型: $DEVICES_NAME"
           echo "保持原设置: $KEEP_ORIGINAL"
           echo "自定义后缀: $CUSTOM_SUFFIX"
           echo "默认后缀: $DEFAULT_SUFFIX"
@@ -357,10 +353,9 @@ jobs:
           if [ "$KEEP_ORIGINAL" = "false" ]; then
             if [ -n "$CUSTOM_SUFFIX" ]; then
               DEFAULT_SUFFIX="$CUSTOM_SUFFIX"
-              echo "使用自定义内核名称: $suffix"
+              echo "使用自定义内核名称: $DEFAULT_SUFFIX"
             else
-              DEFAULT_SUFFIX="$DEFAULT_SUFFIX"
-              echo "使用机型默认内核名称: $suffix"
+              echo "使用机型默认内核名称: $DEFAULT_SUFFIX"
             fi
           else
             echo "保持原内核名称设置"
@@ -399,8 +394,24 @@ jobs:
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2  gki_defconfig
           
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2  Image
+          
+      - name: 📦 Make AnyKernel3 (NoKPM)
+        if [ ${{ inputs.enable_feature_x }} ]
+        run: |
+          git clone https://github.com/showdo/AnyKernel3.git --depth=1 AnyKernel3_NoKPM
+          rm -rf ./AnyKernel3_NoKPM/.git
+          rm -rf ./AnyKernel3_NoKPM/push.sh
+          cp kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image ./AnyKernel3_NoKPM/
+      
+      
+      - name: 📤 Upload AnyKernel3 (上传NoKPM_AK3包)
+        if [ ${{ inputs.enable_feature_x }} ]
+        uses: actions/upload-artifact@v4
+        with:
+          name: AK3_NoKPM_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_SuKiSU
+          path: ./AnyKernel3_NoKPM/*
 
-      - name: 📦 Apply Linux Patch (应用KPM修补补丁)
+      - name: 📦 Apply KPM Patch (应用KPM修补补丁)
         run: |
          cd kernel_workspace/kernel_platform/common/out/arch/arm64/boot
          curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux
@@ -409,17 +420,17 @@ jobs:
          rm -f Image
          mv oImage Image
          
-      - name: 📦 Make AnyKernel3 (创建AnyKernel3)
+      - name: 📦 Make AnyKernel3 (KPM)
         run: |
          git clone https://github.com/showdo/AnyKernel3.git --depth=1      
          rm -rf ./AnyKernel3/.git
          rm -rf ./AnyKernel3/push.sh
          cp kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image ./AnyKernel3/
 
-      - name: 📤 Upload AnyKernel3 (上传 AnyKernel3)
+      - name: 📤 Upload AnyKernel3 (上传 KPM_AK3包)
         uses: actions/upload-artifact@v4
         with:
-         name: AnyKernel3_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_SuKiSU
+         name: AK3_KPM_${{ env.KSUVER }}_${{ env.DEVICES_NAME }}_SuKiSU
          path: ./AnyKernel3/*
          
       - name: 📊 Post-build disk check (构建后空间检查)
