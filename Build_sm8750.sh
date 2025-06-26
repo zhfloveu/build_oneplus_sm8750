@@ -183,12 +183,6 @@ cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android15-6.6.patch ./common/
 cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
 cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-if [ "$ENABLE_LZ4KD" = "true"]; then
-  cp ../kernel_patches/001-lz4.patch ./common/
-  cp ../kernel_patches/lz4armv8.S ./common/lib
-  cp ../kernel_patches/002-zstd.patch ./common/
-fi
-
 cd $KERNEL_WORKSPACE/kernel_platform/common || { echo "进入common目录失败"; exit 1; }
 
 
@@ -239,18 +233,20 @@ apply_hmbird_patch() {
 
 # 主流程
 apply_hmbird_patch
-
-cd kernel_workspace/kernel_platform/common
-# 更新LZ4实现
-curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4_decompress.c
-curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4defs.h
-curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4_compress.c
-curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4hc_compress.c
-
-# 更新Zstd实现
-mkdir -p lib/zstd && cd lib/zstd
-curl -sSL https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/zstd/zstd_common_module.c -o common.c
-
+if [ "$ENABLE_LZ4KD" = "true"]; then
+  cd kernel_workspace/kernel_platform/common
+  info "更新LZ4实现"
+  curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4_decompress.c
+  curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4defs.h
+  curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4_compress.c
+  curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4hc_compress.c
+  
+  info "更新Zstd实现"
+  mkdir -p lib/zstd && cd lib/zstd
+  curl -sSL https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/zstd/zstd_common_module.c -o common.c
+  cd ../../..
+  info "✅ LZ4/Zstd 算法更新完成"
+fi
 # 返回common目录
 cd .. || error "返回common目录失败"
 cd arch/arm64/configs || error "进入configs目录失败"
