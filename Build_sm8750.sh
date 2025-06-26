@@ -15,7 +15,6 @@ error() {
 }
 
 # 参数设置
-KERNEL_SUFFIX="-android15-8-g013ec21bba94-abogki383916444-4k"
 ENABLE_KPM=true
 ENABLE_LZ4KD=true
 
@@ -32,21 +31,25 @@ case $device_choice in
         DEVICE_NAME="oneplus_ace5_pro"
         REPO_MANIFEST="JiuGeFaCai_oneplus_ace5_pro_v.xml"
         KERNEL_TIME="Wed Dec 4 02:11:46 UTC 2024"
+        KERNEL_SUFFIX="-android15-8-g013ec21bba94-abogki383916444-4k"
         ;;
     2)
         DEVICE_NAME="oneplus_13"
         REPO_MANIFEST="JiuGeFaCai_oneplus_13_v.xml"
         KERNEL_TIME="Tue Dec 17 23:36:49 UTC 2024"
+        KERNEL_SUFFIX="-android15-8-g013ec21bba94-abogki383916444-4k"
         ;;
     3)
         DEVICE_NAME="oneplus_13t"
         REPO_MANIFEST="oneplus_13t.xml"
-        KERNEL_TIME="Tue Dec 17 23:36:49 UTC 2024"
+        KERNEL_TIME="FriApr 25 01:56:53 UTC 2025"
+        KERNEL_SUFFIX="-android15-8-gba3bcfd39307-abogki413159095-4k"
         ;;
     4)
         DEVICE_NAME="oneplus_pad_2_pro"
         REPO_MANIFEST="oneplus_pad_2_pro.xml"
-        KERNEL_TIME="Tue Dec 17 23:36:49 UTC 2024"
+        KERNEL_TIME="Wed Dec 11 19:16:38 UTC 2024"
+        KERNEL_SUFFIX="-android15-8-g0261dbe3cf7e-ab12786384-4k"   
         ;;
     *)
         error "无效的选择，请输入1-3之间的数字"
@@ -265,11 +268,18 @@ CONFIG_KSU_SUSFS_ENABLE_LOG=y
 CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
 CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
 CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+# 启用高级压缩支持
 CONFIG_CRYPTO_LZ4HC=y
 CONFIG_CRYPTO_LZ4=y
-CONFIG_CRYPTO_LZ4K=y
-CONFIG_CRYPTO_842=y
-# BBR
+CONFIG_CRYPTO_ZSTD=y
+# 文件系统级压缩支持
+CONFIG_F2FS_FS_COMPRESSION=y
+CONFIG_F2FS_FS_LZ4=y
+CONFIG_F2FS_FS_LZ4HC=y
+CONFIG_F2FS_FS_ZSTD=y
+# 内核镜像压缩配置
+CONFIG_KERNEL_LZ4=y
+# BBR(TCP拥塞控制算法)
 CONFIG_TCP_CONG_ADVANCED=y
 CONFIG_TCP_CONG_BBR=y
 CONFIG_NET_SCH_FQ=y
