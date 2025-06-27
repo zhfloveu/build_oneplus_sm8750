@@ -166,7 +166,7 @@ rm -f kernel_platform/msm-kernel/android/abi_gki_protected_exports_*
 # 设置SukiSU
 info "设置SukiSU..."
 cd kernel_platform || error "进入kernel_platform失败"
-curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/susfs-main/kernel/setup.sh" | bash -s susfs-main
 cd KernelSU || error "进入KernelSU目录失败"
 KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10700)
 export KSU_VERSION=$KSU_VERSION
