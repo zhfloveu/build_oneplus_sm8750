@@ -11,6 +11,7 @@ on:
           - 'oneplus_ace5_pro'
           - 'oneplus_13t'
           - 'oneplus_pad_2_pro'
+          - 'oneplus_ace5_ultra'
         default: 'oneplus_ace5_pro'
 
       keep_original_settings:
@@ -93,6 +94,9 @@ jobs:
                 ;;
               oneplus_pad_2_pro)
                 echo 'KERNEL_TIME=Wed Dec 11 19:16:38 UTC 2024' >> $GITHUB_ENV
+                ;;
+              oneplus_ace5_ultra)
+                echo 'KERNEL_TIME=Fri Apr 18 19:35:07 UTC 2025' >> $GITHUB_ENV
                 ;;
             esac
           fi
@@ -180,7 +184,7 @@ jobs:
       - name: 📥 Initialize repo and sync (初始化repo并同步内核源码)
         run: |
          mkdir kernel_workspace && cd kernel_workspace
-         repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m ${REPO_MANIFEST}.xml --depth=1
+         repo init -u https://github.com/showdo/kernel_manifest.git -b refs/heads/oneplus/sm8750 -m ${REPO_MANIFEST}.xml --depth=1
          repo --trace sync -c -j$(nproc --all) --no-tags
          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
@@ -210,7 +214,7 @@ jobs:
            # Apply patches
            cd ./common
 
-           if [ "${REPO_MANIFEST}" != "oneplus_13t" ]; then
+           if [ "${REPO_MANIFEST}" != "oneplus_13t" ] && [ "${REPO_MANIFEST}" != "oneplus_ace5_ultra" ]; then
             sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-android15-6.6.patch
             sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-android15-6.6.patch
            fi
@@ -342,6 +346,9 @@ jobs:
               ;;
             oneplus_pad_2_pro)
               DEFAULT_SUFFIX="-android15-8-g0261dbe3cf7e-ab12786384-4k"
+              ;;
+            oneplus_ace5_ultra)
+              DEFAULT_SUFFIX="-android15-8-gfc70d29746a7-abogki412262948-4k"
               ;;
           esac
           
