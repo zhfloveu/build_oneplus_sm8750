@@ -12,21 +12,23 @@ on:
           - 'oneplus_13t'
           - 'oneplus_pad_2_pro'
           - 'oneplus_ace5_ultra'
+          - 'realme_GT7pro'
+          - 'realme_GT7pro_Speed'
         default: 'oneplus_ace5_pro'
 
       keep_original_settings:
-        description: "✅ 保持原内核名称及构建时间"
+        description: "保持原内核名称及构建时间"
         required: false
         default: true
         type: boolean
 
       custom_kernel_suffix:
-        description: "✏️ 自定义内核名称(可中文和emoji) - 仅在取消勾选'保持原设置'时有效"
+        description: "✏️ 自定义内核名称(示例:-TG@qdykernel) - 仅在取消勾选'保持原设置'时有效"
         required: false
         default: ''
       
       custom_kernel_time:
-        description: "⏰ 自定义构建时间(示例：Tue Dec 17 23:36:49 UTC 2024) - 仅在取消勾选'保持原设置'时有效"
+        description: "⏰ 自定义构建时间(示例:Tue Dec 17 23:36:49 UTC 2024) - 仅在取消勾选'保持原设置'时有效"
         required: false
         default: ''
       
@@ -53,6 +55,7 @@ on:
 
 jobs:
   build:
+    name: Build_${{ github.event.inputs.REPO_MANIFEST }}
     runs-on: ubuntu-latest
     steps:
       - name: 📊 Check disk space (检查磁盘空间)
@@ -86,7 +89,7 @@ jobs:
             echo "KERNEL_TIME=$CUSTOM_TIME" >> $GITHUB_ENV
           else
             case "$DEVICES_NAME" in
-              oneplus_13 | oneplus_ace5_pro)
+              oneplus_13 | oneplus_ace5_pro | realme_GT7pro | realme_GT7pro_Speed)
                 echo 'KERNEL_TIME=Tue Dec 17 23:36:49 UTC 2024' >> $GITHUB_ENV
                 ;;
               oneplus_13t)
@@ -338,7 +341,7 @@ jobs:
           cd kernel_workspace/kernel_platform
 
           case "$DEVICES_NAME" in
-            oneplus_13 | oneplus_ace5_pro)
+            oneplus_13 | oneplus_ace5_pro | realme_GT7pro | realme_GT7pro_Speed)
               DEFAULT_SUFFIX="-android15-8-g013ec21bba94-abogki383916444-4k"
               ;;
             oneplus_13t)
