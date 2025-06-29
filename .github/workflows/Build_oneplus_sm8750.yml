@@ -55,6 +55,7 @@ on:
 
 jobs:
   build:
+    name: Build_${{ github.event.inputs.REPO_MANIFEST }}
     runs-on: ubuntu-latest
     steps:
       - name: 📊 Check disk space (检查磁盘空间)
