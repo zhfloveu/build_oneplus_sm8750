@@ -38,11 +38,11 @@ on:
         default: true
         type: boolean
         
-      enable_feature_y:
-        description: "启用lz4+zstd"
-        required: false
-        default: true
-        type: boolean
+      # enable_feature_y:
+      #   description: "启用lz4+zstd"
+      #   required: false
+      #   default: true
+      #   type: boolean
         
       enable_feature_z:
         description: "添加风驰驱动"
@@ -255,27 +255,6 @@ jobs:
           echo "HMBird补丁应用完成"
 
           
-      - name: 🔧 Update compression algorithms (更新压缩算法)
-        if: ${{ inputs.enable_feature_y }}
-        run: |
-          cd kernel_workspace/kernel_platform/common
-          
-          # 更新LZ4实现
-          curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4_decompress.c
-          curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4defs.h
-          curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4_compress.c
-          curl -sSLO https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/lz4/lz4hc_compress.c
-          
-          # 更新Zstd实现
-          zstd_base="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/lib/zstd"
-          mkdir -p lib/zstd && cd lib/zstd
-          curl -sSL $zstd_base/zstd_common_module.c -o common.c
-          curl -sSL $zstd_base/compress/zstd_compress_module.c -o compress.c
-          curl -sSL $zstd_base/decompress/zstd_decompress_module.c -o decompress.c
-          curl -sSL $zstd_base/zstd_compat.h -o compat.h
-          
-          cd ../../..
-          echo "✅ LZ4/Zstd 算法更新完成"
 
       - name: 🔧 Set gki_defconfig (设置编译配置)
         run: |
