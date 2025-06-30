@@ -38,11 +38,11 @@ on:
         default: true
         type: boolean
         
-      # enable_feature_y:
-      #   description: "启用lz4+zstd"
-      #   required: false
-      #   default: true
-      #   type: boolean
+      enable_feature_y:
+        description: "启用lz4kd"
+        required: false
+        default: true
+        type: boolean
         
       enable_feature_z:
         description: "添加风驰驱动"
@@ -214,6 +214,11 @@ jobs:
            cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
            cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
+           cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
+           cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./common/lib
+           cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto
+           cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
+
            # Apply patches
            cd ./common
 
@@ -255,7 +260,13 @@ jobs:
           echo "HMBird补丁应用完成"
 
           
-
+      - name: Apply lz4kd Patches
+        if: ${{inputs.enable_feature_y }}
+        run: |
+          cd kernel_workspace/kernel_platform/common
+            cp ../../SukiSU_patch/other/zram/zram_patch/6.6/lz4kd.patch ./
+            patch -p1 -F 3 < lz4kd.patch || true
+            
       - name: 🔧 Set gki_defconfig (设置编译配置)
         run: |
           cd kernel_workspace/kernel_platform
